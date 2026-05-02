@@ -15,6 +15,8 @@ from pathlib import Path
 
 import markdown
 
+from pipeline.watchlist_parser import WatchlistEntry, parse_watchlist
+
 
 SITE_K_E_R_PATH = Path("/home/soccz/22tb/soccz.github.io/projects/k-e-r")
 
@@ -36,177 +38,286 @@ class ReportEntry:
 _SHARED_CSS = """
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  /* 기업 리서치 보고서 톤 — cool, professional */
-  --bg: #f8f9fb;
+  /* sell-side equity research report — sophisticated, archival */
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --surface-alt: #fbfcfd;
-  --surface-hover: #f3f5f9;
-  --border: #e3e8ef;
-  --border-light: #eef1f6;
-  --border-strong: #cbd5e1;
-  --text: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
-  --text-light: #94a3b8;
-  --accent: #1e3a8a;
-  --accent-light: #eff6ff;
-  --accent-hover: #1e40af;
-  --accent-soft: #93c5fd;
-  --positive: #15803d;
-  --positive-light: #f0fdf4;
-  --negative: #b91c1c;
-  --negative-light: #fef2f2;
-  --warn: #b45309;
-  --warn-light: #fefce8;
-  --tag-bg: #eef1f6;
-  --tag-text: #475569;
-  --max-w: 1080px;
-  --content-w: 820px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --shadow-sm: 0 1px 2px rgba(15,23,42,0.04);
-  --shadow-md: 0 2px 8px rgba(15,23,42,0.06);
-  --shadow-lg: 0 8px 24px rgba(15,23,42,0.08);
+  --surface-alt: #fafbfc;
+  --surface-hover: #f1f3f7;
+  --paper: #fcfcfd;
+  --border: #dde2ea;
+  --border-light: #eaedf2;
+  --border-strong: #b8c0cc;
+  --text: #0a0e1a;
+  --text-secondary: #2c3445;
+  --text-muted: #6b7387;
+  --text-light: #9aa1b1;
+  --accent: #14213d;
+  --accent-light: #eef1f7;
+  --accent-hover: #0a1228;
+  --accent-soft: #5d6d8c;
+  --rule: #1a2238;
+  --positive: #1f6f4a;
+  --positive-light: #ecf7f1;
+  --negative: #9a3434;
+  --negative-light: #faeded;
+  --warn: #8a6109;
+  --warn-light: #faf3df;
+  --tag-bg: #eef0f4;
+  --tag-text: #404a5c;
+  --max-w: 1180px;
+  --content-w: 760px;
+  --sidebar-w: 240px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --shadow-sm: 0 1px 2px rgba(10,14,26,0.04);
+  --shadow-md: 0 2px 8px rgba(10,14,26,0.06);
+  --shadow-lg: 0 12px 28px rgba(10,14,26,0.08);
+  --serif: 'Source Serif 4', 'IBM Plex Serif', Georgia, serif;
+  --sans: 'Inter', 'Noto Sans KR', -apple-system, sans-serif;
+  --display: 'IBM Plex Sans', 'Inter', sans-serif;
+  --mono: 'IBM Plex Mono', 'JetBrains Mono', Menlo, monospace;
 }
 html { scroll-behavior: smooth; }
 body {
-  font-family: 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--sans);
   background: var(--bg);
   color: var(--text);
   line-height: 1.7;
   padding-bottom: 80px;
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: 'cv11', 'ss01';
+  font-feature-settings: 'cv11','ss01','calt';
+  background-image:
+    linear-gradient(to bottom, transparent 0, transparent 24px, rgba(20,33,61,0.015) 24px, rgba(20,33,61,0.015) 25px, transparent 25px),
+    linear-gradient(to right, transparent 0, transparent 240px, rgba(20,33,61,0.015) 240px, rgba(20,33,61,0.015) 241px, transparent 241px);
+  background-size: 100% 25px, 240px 100%;
 }
-::selection { background: var(--accent-light); color: var(--accent); }
+::selection { background: var(--accent); color: #fff; }
 a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
-a:hover { color: var(--accent-hover); text-decoration: underline; }
+a:hover { color: var(--accent-hover); text-decoration: underline; text-underline-offset: 2px; }
 
+/* 상단 — 미니멀, 신문 매스트헤드 톤 */
 .site-header {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  border-top: 3px solid var(--rule);
   position: sticky; top: 0; z-index: 100;
-  padding: 14px 24px;
 }
 .site-header .inner {
   max-width: var(--max-w); margin: 0 auto;
+  padding: 16px 32px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
 }
 .site-header .brand {
-  font-family: 'IBM Plex Sans', 'Inter', sans-serif;
-  font-weight: 700; font-size: 16px; letter-spacing: -0.01em;
-  display: flex; align-items: center; gap: 10px;
+  font-family: var(--display);
+  font-weight: 700; font-size: 17px; letter-spacing: -0.02em;
+  display: flex; align-items: center; gap: 12px;
   color: var(--text);
 }
+.site-header .brand .divider {
+  width: 1px; height: 18px; background: var(--border-strong);
+}
 .site-header .brand .badge {
-  background: var(--accent-light); color: var(--accent);
-  padding: 2px 10px; border-radius: 4px;
-  font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
-  text-transform: uppercase;
+  background: transparent; color: var(--text-muted);
+  padding: 0; font-size: 11px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
 }
 .site-header nav a {
-  color: var(--text-secondary); margin-left: 18px; font-size: 13px;
+  color: var(--text-secondary); margin-left: 22px; font-size: 13px;
   font-weight: 500;
 }
 .site-header nav a:hover { color: var(--accent); text-decoration: none; }
 
-.container { max-width: var(--max-w); margin: 0 auto; padding: 28px 24px; }
+.container { max-width: var(--max-w); margin: 0 auto; padding: 36px 32px; }
 
-/* HERO — 보고서 표지 */
+/* HERO — 보고서 표지 (cover page 톤) */
 .page-hero {
-  margin: 8px 0 32px;
-  padding: 32px 36px;
-  background: var(--surface);
+  margin: 0 0 40px;
+  padding: 44px 48px;
+  background: var(--paper);
   border: 1px solid var(--border);
-  border-top: 3px solid var(--accent);
-  border-radius: var(--radius-lg);
+  position: relative;
   box-shadow: var(--shadow-sm);
+}
+.page-hero::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 4px;
+  background: var(--rule);
+}
+.page-hero::after {
+  content: ''; position: absolute;
+  top: 4px; left: 0; right: 0; height: 1px;
+  background: var(--accent-soft);
 }
 .page-hero .doc-tag {
   display: inline-block;
-  background: var(--accent-light); color: var(--accent);
-  padding: 3px 10px; border-radius: 4px;
-  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
-  text-transform: uppercase; margin-bottom: 14px;
+  color: var(--text-muted);
+  padding: 0; margin-bottom: 18px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-strong);
+  padding-bottom: 6px;
 }
 .page-hero h1 {
-  font-family: 'IBM Plex Sans', 'Inter', sans-serif;
-  font-size: 30px; font-weight: 700; line-height: 1.2;
-  margin-bottom: 6px; letter-spacing: -0.02em;
+  font-family: var(--display);
+  font-size: 34px; font-weight: 700; line-height: 1.18;
+  margin-bottom: 10px; letter-spacing: -0.025em;
+  color: var(--text);
+}
+.page-hero h1 .secondary {
+  color: var(--text-muted); font-weight: 400;
 }
 .page-hero .subtitle {
-  color: var(--text-muted); font-size: 15px;
+  color: var(--text-secondary); font-size: 15px;
+  font-family: var(--serif); font-style: italic;
+  margin-top: 8px;
 }
 .page-hero .meta {
-  display: flex; gap: 24px; flex-wrap: wrap;
-  margin-top: 20px; padding-top: 16px;
-  border-top: 1px dashed var(--border);
+  display: flex; gap: 32px; flex-wrap: wrap;
+  margin-top: 28px; padding-top: 18px;
+  border-top: 1px solid var(--border);
   font-size: 13px;
 }
 .page-hero .meta .item {
   display: inline-flex; flex-direction: column; gap: 2px;
 }
 .page-hero .meta .item .label {
-  color: var(--text-light); font-size: 11px;
-  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-light); font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  font-weight: 500;
 }
 .page-hero .meta .item .value {
   color: var(--text-secondary); font-weight: 500;
 }
 
-/* ARTICLE — 본문 */
+/* REPORT LAYOUT — 본문 + 사이드 TOC */
+.report-layout {
+  display: grid;
+  grid-template-columns: 1fr var(--sidebar-w);
+  gap: 40px;
+  align-items: start;
+}
+.report-toc {
+  position: sticky; top: 80px;
+  padding: 24px 0;
+  font-size: 13px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+.report-toc .toc-title {
+  font-family: var(--display);
+  font-weight: 600; font-size: 11px;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 14px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.report-toc ul { list-style: none; padding: 0; margin: 0; }
+.report-toc ul ul { padding-left: 14px; margin: 4px 0; border-left: 1px solid var(--border-light); }
+.report-toc li { margin: 4px 0; }
+.report-toc a {
+  color: var(--text-secondary);
+  display: block; padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  border-left: 2px solid transparent;
+  margin-left: -10px;
+  transition: all 0.12s;
+}
+.report-toc a:hover {
+  color: var(--accent); background: var(--surface-alt);
+  border-left-color: var(--accent-soft);
+  text-decoration: none;
+}
+.report-toc ul ul a { font-weight: 400; font-size: 12px; color: var(--text-muted); padding: 3px 8px; }
+
+@media (max-width: 980px) {
+  .report-layout { grid-template-columns: 1fr; }
+  .report-toc { display: none; }
+}
+
+/* ARTICLE — 본문 (paper-like) */
 article.report {
-  background: var(--surface);
+  background: var(--paper);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
   padding: 56px 64px;
   box-shadow: var(--shadow-sm);
-  max-width: var(--content-w); margin: 0 auto;
+  max-width: var(--content-w);
+  position: relative;
 }
-article.report > h1:first-child { margin-top: 0; }
+article.report::before {
+  content: ''; position: absolute;
+  top: 0; left: 56px; right: 56px; height: 1px;
+  background: var(--rule); opacity: 0.6;
+}
+article.report > h1:first-child,
+article.report > h2:first-child { margin-top: 0; }
+
 article.report h1 {
-  font-family: 'IBM Plex Sans', 'Inter', sans-serif;
-  font-size: 26px; font-weight: 700; letter-spacing: -0.015em;
-  margin: 36px 0 16px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid var(--accent);
+  font-family: var(--display);
+  font-size: 26px; font-weight: 700; letter-spacing: -0.02em;
+  margin: 40px 0 16px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--rule);
+  color: var(--text);
 }
 article.report h2 {
-  font-family: 'IBM Plex Sans', 'Inter', sans-serif;
-  font-size: 20px; font-weight: 700; letter-spacing: -0.01em;
-  margin: 40px 0 14px;
+  font-family: var(--display);
+  font-size: 19px; font-weight: 700; letter-spacing: -0.012em;
+  margin: 44px 0 16px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
+  counter-increment: section;
+  position: relative;
+}
+article.report h2::before {
+  content: counter(section, decimal-leading-zero);
+  font-family: var(--mono); font-weight: 500;
+  font-size: 11px; color: var(--text-muted);
+  letter-spacing: 0.05em;
+  position: absolute; left: -36px; top: 8px;
+}
+article.report {
+  counter-reset: section;
 }
 article.report h3 {
   font-size: 16px; font-weight: 600;
-  margin: 28px 0 10px;
+  margin: 30px 0 10px;
   color: var(--text);
+  letter-spacing: -0.005em;
 }
 article.report h4 {
-  font-size: 14px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--text-secondary);
-  margin: 22px 0 8px;
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-muted);
+  margin: 26px 0 10px;
 }
-article.report p { margin: 12px 0; }
-article.report ul, article.report ol { margin: 12px 0 12px 24px; }
-article.report li { margin: 4px 0; }
 
-/* 데이터 기준시점 박스 (blockquote 첫 위치) */
+article.report p { margin: 14px 0; font-size: 15px; }
+article.report p strong { color: var(--text); }
+article.report ul, article.report ol { margin: 14px 0 14px 24px; font-size: 15px; }
+article.report li { margin: 5px 0; }
+article.report li::marker { color: var(--text-muted); }
+
+/* 인용·박스 — 데이터 기준시점 등 */
 article.report blockquote {
-  border-left: 3px solid var(--accent);
+  border-left: 2px solid var(--rule);
   background: var(--surface-alt);
-  padding: 14px 20px;
-  margin: 20px 0;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 16px 22px;
+  margin: 22px 0;
   font-size: 13px;
   color: var(--text-secondary);
+  font-family: var(--mono);
+  line-height: 1.6;
 }
-article.report blockquote strong { color: var(--accent); }
+article.report blockquote strong {
+  color: var(--text); font-family: var(--display);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: 11px; font-weight: 700;
+}
 article.report blockquote p { margin: 4px 0; }
-article.report blockquote ul { margin: 6px 0 0 20px; }
+article.report blockquote ul { margin: 6px 0 0 18px; }
+article.report blockquote ul li { font-size: 12px; }
 
 /* 코드 — 출처 인용 [...] 형식 */
 article.report code {
@@ -223,30 +334,38 @@ article.report pre {
 }
 article.report pre code { background: transparent; padding: 0; }
 
-/* 표 — 재무 데이터 스타일 */
+/* 표 — 재무 데이터 보고서 스타일 */
 article.report table {
-  width: 100%; border-collapse: collapse; margin: 20px 0;
+  width: 100%; border-collapse: collapse; margin: 22px 0;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm); overflow: hidden;
+  border-top: 2px solid var(--rule);
+  border-bottom: 2px solid var(--rule);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 article.report table th, article.report table td {
-  padding: 9px 14px; text-align: left;
+  padding: 8px 12px; text-align: left;
   border-bottom: 1px solid var(--border-light);
 }
 article.report table th {
-  background: var(--surface-alt);
-  font-weight: 600; color: var(--text);
-  border-bottom: 1.5px solid var(--border-strong);
-  font-size: 12px; letter-spacing: 0.02em;
+  font-weight: 700; color: var(--text);
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 11px; letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-family: var(--display);
 }
-article.report table td:not(:first-child) { text-align: right; font-feature-settings: 'tnum'; }
-article.report table th:not(:first-child) { text-align: right; }
+article.report table td:not(:first-child),
+article.report table th:not(:first-child) {
+  text-align: right; font-feature-settings: 'tnum';
+}
 article.report table tr:last-child td { border-bottom: none; }
-article.report table tr:hover { background: var(--surface-hover); }
+article.report table tr:hover { background: var(--surface-alt); }
 article.report table strong { color: var(--text); }
+article.report table tr:has(td strong),
+article.report table tr:has(td:first-child strong) {
+  background: var(--surface-alt);
+  border-top: 1px solid var(--border-strong);
+}
 
 article.report hr {
   border: none; border-top: 1px solid var(--border-light);
@@ -315,6 +434,20 @@ article.report em { color: var(--text-muted); font-style: normal; }
   letter-spacing: 0.02em;
 }
 
+/* 추적 중 (보고서 미생성) 카드 — placeholder */
+.report-card.report-card-empty {
+  background: var(--surface-alt);
+  border-style: dashed;
+  opacity: 0.85;
+}
+.report-card.report-card-empty:hover {
+  transform: none; box-shadow: var(--shadow-sm);
+  border-color: var(--border);
+}
+.badge.badge-empty {
+  background: var(--tag-bg); color: var(--text-muted);
+}
+
 footer.site-footer {
   margin-top: 60px;
   padding: 20px 24px;
@@ -347,7 +480,7 @@ def _wrap_html(title: str, body: str, breadcrumb: str = "") -> str:
   <title>{escape(title)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   <style>{_SHARED_CSS}</style>
 </head>
 <body>
@@ -386,6 +519,29 @@ def _md_to_html(md_text: str) -> str:
     return md.convert(md_text)
 
 
+def _period_to_friendly(period: str) -> str:
+    """폴더명 → 친근한 라벨.
+
+    2025-annual  → 사업보고서 (2025)
+    2025-H1      → 반기보고서 (2025)
+    2026-Q1      → 1분기보고서 (2026)
+    2026-Q3      → 3분기보고서 (2026)
+    그 외        → period 원본
+    """
+    import re
+    m = re.match(r"^(\d{4})-(annual|H1|Q1|Q3)$", period.strip())
+    if not m:
+        return period
+    year, kind = m.group(1), m.group(2)
+    label = {
+        "annual": "사업보고서",
+        "H1": "반기보고서",
+        "Q1": "1분기보고서",
+        "Q3": "3분기보고서",
+    }[kind]
+    return f"{label} ({year})"
+
+
 def _extract_one_liner(md_text: str, max_len: int = 200) -> str:
     """첫 의미 단락 (헤더·메타박스 제외)."""
     in_box = False
@@ -405,6 +561,43 @@ def _extract_one_liner(md_text: str, max_len: int = 200) -> str:
     return ""
 
 
+def _build_toc(md_text: str) -> str:
+    """본문 헤더(##, ###)에서 TOC sidebar HTML 생성."""
+    import re
+    items: list[tuple[int, str, str]] = []  # (level, anchor, title)
+    in_code = False
+    for line in md_text.splitlines():
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            continue
+        m = re.match(r"^(#{2,3})\s+(.+)$", line)
+        if not m:
+            continue
+        level = len(m.group(1))
+        title = m.group(2).strip().rstrip("#").strip()
+        anchor = re.sub(r"[^\w가-힣\-]+", "-", title.lower()).strip("-")
+        items.append((level, anchor, title))
+
+    if not items:
+        return ""
+    out: list[str] = ['<aside class="report-toc"><div class="toc-title">목차</div><ul>']
+    current_level = 2
+    for lvl, anchor, title in items:
+        if lvl > current_level:
+            out.append("<ul>")
+        elif lvl < current_level:
+            out.append("</ul>")
+        current_level = lvl
+        out.append(f'<li><a href="#{escape(anchor)}">{escape(title)}</a></li>')
+    while current_level > 2:
+        out.append("</ul>")
+        current_level -= 1
+    out.append("</ul></aside>")
+    return "".join(out)
+
+
 def render_report_to_html(
     md_path: Path,
     out_html_path: Path,
@@ -415,25 +608,38 @@ def render_report_to_html(
     md_text = md_path.read_text(encoding="utf-8")
     body_md = _md_to_html(md_text)
     written = written_at or datetime.fromtimestamp(md_path.stat().st_mtime).strftime("%Y-%m-%d")
+    friendly = _period_to_friendly(period)
+    toc_html = _build_toc(md_text)
 
     breadcrumb = f"""
-<div class="container" style="padding-top:20px; padding-bottom:0; font-size:14px; color:var(--text-muted);">
-  <a href="../../index.html">← K_E_R 전체 보고서</a> &nbsp;·&nbsp;
-  <a href="../index.html">{escape(company)}</a> &nbsp;·&nbsp; {escape(period)}
+<div class="container" style="padding-top:24px; padding-bottom:0; font-size:12px; color:var(--text-muted); letter-spacing:0.04em;">
+  <a href="../../index.html" style="color:var(--text-muted)">K_E_R</a>
+  &nbsp;/&nbsp;
+  <a href="../index.html" style="color:var(--text-muted)">{escape(company)}</a>
+  &nbsp;/&nbsp;
+  <span style="color:var(--text-secondary)">{escape(friendly)}</span>
 </div>"""
 
     hero = f"""
 <div class="page-hero">
-  <h1>{escape(company)} <span style="color:var(--text-muted);font-weight:400">· {escape(period)}</span></h1>
+  <span class="doc-tag">Equity Diagnosis Report</span>
+  <h1>{escape(company)} <span class="secondary">· {escape(friendly)}</span></h1>
+  <p class="subtitle">DART 공시 기반 종합 검진 — 출처 검증 + 추론 명시 + XBRL ground truth</p>
   <div class="meta">
-    <span class="item">📅 작성 {escape(written)}</span>
-    <span class="item">🔍 DART 기반 자동 진단</span>
-    <span class="item">✓ 출처 검증 + 추론 명시</span>
+    <div class="item"><span class="label">Issuer</span><span class="value">{escape(company)}</span></div>
+    <div class="item"><span class="label">Period</span><span class="value">{escape(friendly)}</span></div>
+    <div class="item"><span class="label">Written</span><span class="value">{escape(written)}</span></div>
+    <div class="item"><span class="label">Source</span><span class="value">DART OpenAPI · XBRL</span></div>
   </div>
 </div>"""
 
-    body = hero + f'<article class="report">{body_md}</article>'
-    title = f"{company} {period} 종합진단 — K_E_R"
+    body = hero + f"""
+<div class="report-layout">
+  <article class="report">{body_md}</article>
+  {toc_html}
+</div>"""
+
+    title = f"{company} {friendly} — K_E_R"
     out_html_path.parent.mkdir(parents=True, exist_ok=True)
     out_html_path.write_text(_wrap_html(title, body, breadcrumb), encoding="utf-8")
 
@@ -446,12 +652,13 @@ def render_company_index(
 ) -> None:
     cards: list[str] = []
     for e in sorted(entries, key=lambda x: x.period, reverse=True):
+        friendly = _period_to_friendly(e.period)
         cards.append(
             f"""
 <a href="{escape(e.html_rel_path)}" style="text-decoration:none;color:inherit;">
   <div class="report-card">
     <span class="badge">{escape(e.period)}</span>
-    <h3>{escape(e.title)}</h3>
+    <h3>{escape(friendly)}</h3>
     <p class="desc">{escape(e.summary)}</p>
     <div class="meta">
       <span>{escape(e.written_at)}</span>
@@ -481,47 +688,104 @@ def render_company_index(
     out_html_path.write_text(_wrap_html(title, body, breadcrumb), encoding="utf-8")
 
 
-def render_master_index(
-    out_html_path: Path,
-    companies: dict[str, list[ReportEntry]],
-) -> None:
-    sections: list[str] = []
-    sorted_companies = sorted(companies.items(), key=lambda x: x[0])
-    for company, entries in sorted_companies:
-        cards: list[str] = []
-        for e in sorted(entries, key=lambda x: x.period, reverse=True)[:3]:
-            cards.append(
-                f"""
-<a href="{escape(e.html_rel_path)}" style="text-decoration:none;color:inherit;">
+def _empty_card_html(company: str) -> str:
+    """보고서 아직 없는 종목용 placeholder 카드."""
+    return f"""
+<div class="report-card report-card-empty">
+  <span class="badge badge-empty">추적 중</span>
+  <h3>{escape(company)}</h3>
+  <p class="desc">첫 정기공시 도착 시 자동 진단 시작.</p>
+  <div class="meta">
+    <span>—</span>
+    <span style="opacity:0.5">대기</span>
+  </div>
+</div>"""
+
+
+def _company_card_html(company: str, entries: list[ReportEntry]) -> str:
+    """해당 회사의 최신 1개 보고서 카드."""
+    latest = sorted(entries, key=lambda x: x.period, reverse=True)[0]
+    friendly = _period_to_friendly(latest.period)
+    href = f"{company}/{latest.html_rel_path}"
+    sub_count = len(entries)
+    sub_text = f"{sub_count}건 누적" if sub_count > 1 else "최신"
+    return f"""
+<a href="{escape(href)}" style="text-decoration:none;color:inherit;">
   <div class="report-card">
-    <span class="badge">{escape(e.period)}</span>
+    <span class="badge">{escape(latest.period)}</span>
     <h3>{escape(company)}</h3>
-    <p class="desc">{escape(e.summary)}</p>
+    <p class="desc">{escape(latest.summary)}</p>
     <div class="meta">
-      <span>{escape(e.written_at)}</span>
-      <span>→ 본문 보기</span>
+      <span>{escape(latest.written_at)} · {sub_text}</span>
+      <span>→ {escape(friendly)}</span>
     </div>
   </div>
 </a>"""
+
+
+def render_master_index(
+    out_html_path: Path,
+    companies: dict[str, list[ReportEntry]],
+    watchlist: list[WatchlistEntry] | None = None,
+) -> None:
+    """마스터 인덱스 — 워치리스트 24종목 전부, 섹터별 그룹.
+
+    워치리스트가 None이면 기존 동작 (보고서 있는 회사만).
+    """
+    sections: list[str] = []
+
+    if watchlist:
+        # 섹터별 그룹 — 워치리스트 정의 순서 유지
+        from collections import OrderedDict
+        sector_groups: OrderedDict[str, list[WatchlistEntry]] = OrderedDict()
+        for w in watchlist:
+            sector_groups.setdefault(w.sector, []).append(w)
+
+        n_total = len(watchlist)
+        n_with_reports = sum(1 for w in watchlist if w.name in companies)
+        n_total_reports = sum(len(v) for v in companies.values())
+
+        for sector, sector_entries in sector_groups.items():
+            cards: list[str] = []
+            for w in sector_entries:
+                if w.name in companies:
+                    cards.append(_company_card_html(w.name, companies[w.name]))
+                else:
+                    cards.append(_empty_card_html(w.name))
+            count = len([w for w in sector_entries if w.name in companies])
+            count_label = (
+                f'<span style="color:var(--accent);font-weight:500">{count}</span>'
+                f'<span style="color:var(--text-muted)"> / {len(sector_entries)}</span>'
             )
-        if cards:
             sections.append(f"""
-<h2 style="font-family:'Space Grotesk';margin:36px 0 14px">{escape(company)}
-  <a href="{escape(company)}/index.html" style="font-size:14px;font-weight:400;margin-left:12px">전체 보기 →</a>
+<h2 class="section-title">
+  <span>{escape(sector)} <span style="font-weight:400;color:var(--text-muted);font-size:14px;margin-left:8px">{count_label}</span></span>
 </h2>
 <div class="report-grid">{''.join(cards)}</div>""")
 
+        meta_extras = (
+            f'<span class="item">총 {n_total}종목 · {n_with_reports}개 보고서 시작</span>'
+            f'<span class="item">누적 {n_total_reports}건</span>'
+            f'<span class="item">분기 단위 자동 갱신</span>'
+        )
+    else:
+        # Fallback: 보고서 있는 회사만
+        for company, entries in sorted(companies.items()):
+            cards = [_company_card_html(company, entries)]
+            sections.append(f"""
+<h2 class="section-title">{escape(company)}</h2>
+<div class="report-grid">{''.join(cards)}</div>""")
+        meta_extras = (
+            '<span class="item">코스피 24종목 · 섹터별 분산</span>'
+            '<span class="item">분기 단위 누적</span>'
+        )
+
     body = f"""
 <div class="page-hero">
+  <span class="doc-tag">Equity Research Pipeline</span>
   <h1>K_E_R — Korea Equity Reports</h1>
-  <p style="color:var(--text-secondary);margin-top:8px;font-size:15px">
-    DART 기반 한국 상장사 종합 진단. 출처 엄격주의 + 추론 명시 + XBRL ground truth.
-  </p>
-  <div class="meta">
-    <span class="item">코스피 24종목 · 섹터별 분산</span>
-    <span class="item">분기 단위 누적</span>
-    <span class="item">기업 종합 검진 톤</span>
-  </div>
+  <p class="subtitle">DART 기반 한국 상장사 종합 진단. 출처 엄격주의 + 추론 명시 + XBRL ground truth.</p>
+  <div class="meta">{meta_extras}</div>
 </div>
 
 {''.join(sections) if sections else '<p>아직 보고서가 없습니다.</p>'}"""
@@ -579,8 +843,13 @@ def discover_reports(companies_dir: Path) -> dict[str, list[ReportEntry]]:
     return out
 
 
-def render_all(companies_dir: Path, site_root: Path) -> tuple[int, int]:
+def render_all(
+    companies_dir: Path,
+    site_root: Path,
+    watchlist_path: Path | None = None,
+) -> tuple[int, int]:
     """전체 변환 — companies → site_root/projects/k-e-r/.
+    워치리스트 path 주면 마스터 인덱스에 24종목 전부 표시 (placeholder 포함).
     반환: (회사 수, 보고서 수)
     """
     discovered = discover_reports(companies_dir)
@@ -602,6 +871,10 @@ def render_all(companies_dir: Path, site_root: Path) -> tuple[int, int]:
         company_index = company_html_dir / "index.html"
         render_company_index(company, company_html_dir, company_index, entries)
 
+    watchlist: list[WatchlistEntry] | None = None
+    if watchlist_path and watchlist_path.exists():
+        watchlist = parse_watchlist(watchlist_path.read_text(encoding="utf-8"))
+
     master = site_root / "index.html"
-    render_master_index(master, discovered)
+    render_master_index(master, discovered, watchlist=watchlist)
     return len(discovered), total_reports

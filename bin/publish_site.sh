@@ -26,8 +26,13 @@ echo "[publish] companies/ → HTML 렌더 → $SITE_KER_DIR"
 .venv/bin/python -c "
 from pathlib import Path
 from pipeline.site_renderer import render_all
-n_companies, n_reports = render_all(Path('companies'), Path('$SITE_KER_DIR'))
-print(f'  rendered: {n_companies} companies, {n_reports} reports')
+n_companies, n_reports = render_all(
+    Path('companies'),
+    Path('$SITE_KER_DIR'),
+    watchlist_path=Path('_watchlist.md'),
+)
+print(f'  rendered: {n_companies} companies with reports, {n_reports} reports total')
+print(f'  master index: 워치리스트 24종목 + placeholder 포함')
 "
 
 # soccz.github.io repo commit + push
