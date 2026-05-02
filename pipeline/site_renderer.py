@@ -616,6 +616,187 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
   text-decoration: none; color: inherit;
   display: block;
 }
+
+/* ─────── 마스터 인덱스 — Dashboard 표 레이아웃 ─────── */
+
+/* Hero stats — 4구획 숫자 */
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  margin-top: 28px; padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+.hero-stats .stat {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 0 16px;
+  border-right: 1px solid var(--border-light);
+}
+.hero-stats .stat:last-child { border-right: none; }
+.hero-stats .stat:first-child { padding-left: 0; }
+.hero-stats .stat-num {
+  font-family: var(--display);
+  font-size: 28px; font-weight: 700;
+  letter-spacing: -0.02em; color: var(--text);
+  font-feature-settings: 'tnum';
+}
+.hero-stats .stat-lbl {
+  font-size: 11px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  font-weight: 500;
+}
+
+/* 섹터 필터 pills (sticky 가까이) */
+.filter-bar {
+  margin: 28px 0 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+}
+.filter-pills {
+  display: flex; flex-wrap: wrap;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0;
+}
+.filter-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface); color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  font-size: 12.5px; font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+  font-family: var(--sans);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.filter-pill:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-alt);
+}
+.filter-pill.active {
+  background: var(--accent); color: #fff;
+  border-color: var(--accent);
+}
+.filter-pill .pill-count {
+  font-family: var(--mono); font-size: 11px;
+  opacity: 0.75; font-weight: 500;
+}
+.filter-pill.active .pill-count { opacity: 0.85; }
+
+/* Watchlist 표 */
+.watchlist-table {
+  background: var(--surface);
+  border-top: 2px solid var(--rule);
+  border-bottom: 2px solid var(--rule);
+  overflow-x: auto;
+}
+.watchlist-table table {
+  width: 100%; border-collapse: collapse;
+  font-size: 14px; font-variant-numeric: tabular-nums;
+}
+.watchlist-table thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-family: var(--display);
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--surface-alt);
+}
+.watchlist-table thead th.status { width: 32px; text-align: center; }
+.watchlist-table thead th.date,
+.watchlist-table thead th.action { text-align: right; }
+.watchlist-table thead th.action { width: 100px; }
+
+/* 섹터 헤더 행 */
+tr.sector-header td {
+  padding: 18px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+tr.sector-header .sector-name {
+  font-family: var(--display);
+  font-size: 13px; font-weight: 700;
+  color: var(--text); letter-spacing: -0.005em;
+}
+tr.sector-header .sector-stat {
+  margin-left: 10px;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text-muted); font-weight: 500;
+}
+
+/* 종목 행 */
+tr.stock-row td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+tr.stock-row.stock-active {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+tr.stock-row.stock-active:hover {
+  background: var(--accent-light);
+}
+tr.stock-row.stock-empty {
+  opacity: 0.7;
+}
+tr.stock-row td.status { width: 32px; text-align: center; }
+tr.stock-row td.name { font-weight: 500; color: var(--text); }
+tr.stock-row td.name .ticker {
+  margin-left: 8px;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text-muted); font-weight: 400;
+}
+tr.stock-row td.latest {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+tr.stock-row td.latest .empty-text {
+  color: var(--text-light); font-style: italic; font-size: 12.5px;
+}
+tr.stock-row td.date {
+  text-align: right;
+  font-family: var(--mono); font-size: 12px;
+  color: var(--text-muted); white-space: nowrap;
+}
+tr.stock-row td.action {
+  text-align: right;
+  font-size: 12px; color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+tr.stock-row.stock-active td.action {
+  color: var(--accent);
+}
+
+/* 상태 dot */
+.dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+.dot-active { background: var(--accent); }
+.dot-empty {
+  border: 1.5px solid var(--text-light);
+  background: transparent;
+  width: 7px; height: 7px;
+}
+
+/* 모바일 — 표 padding 축소 + 일부 칼럼 숨김 */
+@media (max-width: 720px) {
+  .hero-stats { grid-template-columns: repeat(2, 1fr); gap: 18px 0; }
+  .hero-stats .stat { padding: 0 12px; }
+  .hero-stats .stat-num { font-size: 22px; }
+  .filter-pills { gap: 5px; }
+  .filter-pill { padding: 5px 10px; font-size: 12px; }
+  .watchlist-table table { font-size: 12.5px; }
+  .watchlist-table thead th, tr.stock-row td { padding: 8px 10px; }
+  tr.stock-row td.date { display: none; }
+  tr.sector-header td { padding: 14px 10px 6px; }
+}
 """
 
 
@@ -1028,67 +1209,128 @@ def render_master_index(
     companies: dict[str, list[ReportEntry]],
     watchlist: list[WatchlistEntry] | None = None,
 ) -> None:
-    """마스터 인덱스 — 워치리스트 24종목 전부, 섹터별 그룹.
+    """마스터 인덱스 — dashboard 표 레이아웃, 섹터 필터 포함.
 
-    워치리스트가 None이면 기존 동작 (보고서 있는 회사만).
+    24종목 전부 한 페이지에 압축 표시. 카드 그리드보다 훨씬 짧음.
     """
-    sections: list[str] = []
-
-    if watchlist:
-        # 섹터별 그룹 — 워치리스트 정의 순서 유지
-        from collections import OrderedDict
-        sector_groups: OrderedDict[str, list[WatchlistEntry]] = OrderedDict()
-        for w in watchlist:
-            sector_groups.setdefault(w.sector, []).append(w)
-
-        n_total = len(watchlist)
-        n_with_reports = sum(1 for w in watchlist if w.name in companies)
-        n_total_reports = sum(len(v) for v in companies.values())
-
-        for sector, sector_entries in sector_groups.items():
-            cards: list[str] = []
-            for w in sector_entries:
-                if w.name in companies:
-                    cards.append(_company_card_html(w.name, companies[w.name]))
-                else:
-                    cards.append(_empty_card_html(w.name))
-            count = len([w for w in sector_entries if w.name in companies])
-            count_label = (
-                f'<span style="color:var(--accent);font-weight:500">{count}</span>'
-                f'<span style="color:var(--text-muted)"> / {len(sector_entries)}</span>'
-            )
-            sections.append(f"""
-<h2 class="section-title">
-  <span>{escape(sector)} <span style="font-weight:400;color:var(--text-muted);font-size:14px;margin-left:8px">{count_label}</span></span>
-</h2>
-<div class="report-grid">{''.join(cards)}</div>""")
-
-        meta_extras = (
-            f'<span class="item">총 {n_total}종목 · {n_with_reports}개 보고서 시작</span>'
-            f'<span class="item">누적 {n_total_reports}건</span>'
-            f'<span class="item">분기 단위 자동 갱신</span>'
-        )
-    else:
-        # Fallback: 보고서 있는 회사만
+    if watchlist is None:
+        watchlist = []
         for company, entries in sorted(companies.items()):
-            cards = [_company_card_html(company, entries)]
-            sections.append(f"""
-<h2 class="section-title">{escape(company)}</h2>
-<div class="report-grid">{''.join(cards)}</div>""")
-        meta_extras = (
-            '<span class="item">코스피 24종목 · 섹터별 분산</span>'
-            '<span class="item">분기 단위 누적</span>'
+            watchlist.append(
+                WatchlistEntry(
+                    name=company, ticker="", corp_code=None,
+                    sector="기타", note="",
+                )
+            )
+
+    from collections import OrderedDict
+    sector_groups: OrderedDict[str, list[WatchlistEntry]] = OrderedDict()
+    for w in watchlist:
+        sector_groups.setdefault(w.sector, []).append(w)
+
+    n_total = len(watchlist)
+    n_with_reports = sum(1 for w in watchlist if w.name in companies)
+    n_total_reports = sum(len(v) for v in companies.values())
+
+    # 섹터 필터 pills (sticky)
+    pills_html = ['<button class="filter-pill active" data-sector="all" onclick="window.kerFilter(\'all\')">전체 <span class="pill-count">{0}</span></button>'.format(n_total)]
+    for sector, sector_entries in sector_groups.items():
+        count = len(sector_entries)
+        with_reports = sum(1 for w in sector_entries if w.name in companies)
+        active_marker = ''
+        pills_html.append(
+            f'<button class="filter-pill" data-sector="{escape(sector)}" '
+            f'onclick="window.kerFilter(\'{escape(sector)}\')">'
+            f'{escape(sector)} <span class="pill-count">{with_reports}/{count}</span></button>'
         )
+
+    # Compact dashboard 표
+    rows_html: list[str] = []
+    for sector, sector_entries in sector_groups.items():
+        # 섹터 헤더 행
+        with_reports = sum(1 for w in sector_entries if w.name in companies)
+        rows_html.append(
+            f'<tr class="sector-header" data-sector="{escape(sector)}">'
+            f'<td colspan="5">'
+            f'<span class="sector-name">{escape(sector)}</span>'
+            f'<span class="sector-stat">{with_reports}/{len(sector_entries)}</span>'
+            f'</td></tr>'
+        )
+        for w in sector_entries:
+            if w.name in companies:
+                latest = sorted(companies[w.name], key=lambda x: x.period, reverse=True)[0]
+                friendly = _period_to_friendly(latest.period)
+                href = f"{w.name}/index.html"
+                report_count = len(companies[w.name])
+                report_label = f"{report_count}건" if report_count > 1 else "1건"
+                rows_html.append(
+                    f'<tr class="stock-row stock-active" data-sector="{escape(sector)}" '
+                    f'onclick="location.href=\'{escape(href)}\'">'
+                    f'<td class="status"><span class="dot dot-active"></span></td>'
+                    f'<td class="name"><strong>{escape(w.name)}</strong>'
+                    f'<span class="ticker">{escape(w.ticker) if w.ticker else ""}</span></td>'
+                    f'<td class="latest">{escape(friendly)}</td>'
+                    f'<td class="date">{escape(latest.written_at)}</td>'
+                    f'<td class="action">{report_label} →</td>'
+                    f'</tr>'
+                )
+            else:
+                rows_html.append(
+                    f'<tr class="stock-row stock-empty" data-sector="{escape(sector)}">'
+                    f'<td class="status"><span class="dot dot-empty"></span></td>'
+                    f'<td class="name">{escape(w.name)}'
+                    f'<span class="ticker">{escape(w.ticker) if w.ticker else ""}</span></td>'
+                    f'<td class="latest" colspan="2"><em class="empty-text">추적 중 — 첫 정기공시 도착 시 자동</em></td>'
+                    f'<td class="action">대기</td>'
+                    f'</tr>'
+                )
 
     body = f"""
 <div class="page-hero">
   <span class="doc-tag">Equity Research Pipeline</span>
   <h1>K_E_R — Korea Equity Reports</h1>
   <p class="subtitle">DART 기반 한국 상장사 종합 진단. 출처 엄격주의 + 추론 명시 + XBRL ground truth.</p>
-  <div class="meta">{meta_extras}</div>
+  <div class="hero-stats">
+    <div class="stat"><span class="stat-num">{n_total}</span><span class="stat-lbl">종목</span></div>
+    <div class="stat"><span class="stat-num">{n_with_reports}</span><span class="stat-lbl">진단 완료</span></div>
+    <div class="stat"><span class="stat-num">{n_total_reports}</span><span class="stat-lbl">누적 보고서</span></div>
+    <div class="stat"><span class="stat-num">{len(sector_groups)}</span><span class="stat-lbl">섹터</span></div>
+  </div>
 </div>
 
-{''.join(sections) if sections else '<p>아직 보고서가 없습니다.</p>'}"""
+<div class="filter-bar">
+  <div class="filter-pills" id="filterPills">
+    {''.join(pills_html)}
+  </div>
+</div>
+
+<div class="watchlist-table">
+<table id="watchlistTable">
+  <thead>
+    <tr>
+      <th class="status">●</th>
+      <th class="name">종목</th>
+      <th class="latest">최신 보고서</th>
+      <th class="date">작성일</th>
+      <th class="action"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {''.join(rows_html)}
+  </tbody>
+</table>
+</div>
+
+<script>
+  window.kerFilter = function(sector) {{
+    document.querySelectorAll('.filter-pill').forEach(function(b) {{
+      b.classList.toggle('active', b.dataset.sector === sector);
+    }});
+    document.querySelectorAll('#watchlistTable tr[data-sector]').forEach(function(tr) {{
+      tr.style.display = (sector === 'all' || tr.dataset.sector === sector) ? '' : 'none';
+    }});
+  }};
+</script>"""
 
     title = "K_E_R — Korea Equity Reports"
     out_html_path.parent.mkdir(parents=True, exist_ok=True)
