@@ -47,9 +47,16 @@ echo "ticker=$TICKER bsns_year=$BSNS_YEAR reprt_code=$REPRT_CODE period=$PERIOD"
 
 # GitHub auto-push — 기본 ON. 끄려면 GIT_AUTO_PUSH=0 환경변수.
 if [ "${GIT_AUTO_PUSH:-1}" = "1" ]; then
-  "$REPO_ROOT/bin/push_results.sh" || echo "(push 실패 — 다음 실행 시 재시도)"
+  "$REPO_ROOT/bin/push_results.sh" || echo "(K_E_R push 실패 — 다음 실행 시 재시도)"
 else
-  echo "[git] auto-push 비활성 (GIT_AUTO_PUSH=0)"
+  echo "[git] K_E_R auto-push 비활성 (GIT_AUTO_PUSH=0)"
+fi
+
+# 시각화 사이트 publish — 기본 ON. 끄려면 SITE_AUTO_PUBLISH=0.
+if [ "${SITE_AUTO_PUBLISH:-1}" = "1" ]; then
+  "$REPO_ROOT/bin/publish_site.sh" || echo "(site publish 실패 — 다음 실행 시 재시도)"
+else
+  echo "[site] auto-publish 비활성 (SITE_AUTO_PUBLISH=0)"
 fi
 
 echo "[$LOG_TS] K_E_R weekday run done"
