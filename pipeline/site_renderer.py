@@ -619,27 +619,25 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
   display: block;
 }
 
-/* ─────── Macro 지표 바 — TradingView 라이브 위젯 ─────── */
+/* ─────── Macro 지표 바 — 인라인 SVG 스파크라인 ─────── */
 .macro-bar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0;
   margin: 24px 0 4px;
-  padding: 16px 0 0;
+  padding: 20px 0 8px;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border-light);
 }
 .macro-cell {
-  padding: 0 14px 8px;
+  padding: 0 16px;
   border-right: 1px solid var(--border-light);
-  display: flex; flex-direction: column; gap: 4px;
-  min-width: 0;
+  display: flex; flex-direction: column; gap: 6px;
 }
 .macro-cell:last-child { border-right: none; }
 .macro-cell:first-child { padding-left: 0; }
 .macro-head {
   display: flex; align-items: baseline; justify-content: space-between;
-  margin-bottom: 4px;
 }
 .macro-label {
   font-family: var(--display);
@@ -651,27 +649,41 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
   font-family: var(--mono); font-size: 10px;
   color: var(--text-light); font-weight: 500;
 }
-.tv-widget-container {
-  width: 100%; height: 145px;
-  overflow: hidden;
-  position: relative;
+.macro-value {
+  font-family: var(--display);
+  font-size: 22px; font-weight: 700;
+  letter-spacing: -0.015em; color: var(--text);
+  font-feature-settings: 'tnum';
+  line-height: 1.1;
 }
-.tv-widget-container .tradingview-widget-container,
-.tv-widget-container .tradingview-widget-container__widget {
-  width: 100%; height: 100%;
+.sparkline {
+  width: 100%; height: 32px;
+  display: block;
+  margin: 2px 0;
 }
-/* TradingView 위젯 내부 iframe 스타일 강제 (best effort) */
-.tv-widget-container iframe { background: transparent !important; }
+.spark-line {
+  stroke-width: 1.5;
+  stroke-linejoin: round; stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.sparkline.spark-up .spark-line { stroke: var(--positive); }
+.sparkline.spark-up .spark-area { fill: var(--positive); opacity: 0.08; }
+.sparkline.spark-down .spark-line { stroke: var(--negative); }
+.sparkline.spark-down .spark-area { fill: var(--negative); opacity: 0.08; }
+.macro-changes {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 11px;
+  font-family: var(--mono);
+  font-feature-settings: 'tnum';
+}
+.macro-up { color: var(--positive); font-weight: 600; }
+.macro-down { color: var(--negative); font-weight: 600; }
+.macro-1y { color: var(--text-light); font-size: 10px; }
 
 @media (max-width: 720px) {
-  .macro-bar { grid-template-columns: repeat(2, 1fr); gap: 4px 0; padding: 12px 0 0; }
-  .macro-cell { padding: 0 8px 6px; }
-  .tv-widget-container { height: 120px; }
-}
-@media (max-width: 480px) {
-  .macro-bar { grid-template-columns: 1fr; }
-  .macro-cell { border-right: none; border-bottom: 1px solid var(--border-light); padding: 8px 4px; }
-  .macro-cell:last-child { border-bottom: none; }
+  .macro-bar { grid-template-columns: repeat(2, 1fr); gap: 18px 0; padding: 16px 0; }
+  .macro-cell { padding: 0 10px; }
+  .macro-value { font-size: 18px; }
 }
 
 /* ─────── 마스터 인덱스 — Dashboard 표 레이아웃 ─────── */
@@ -1249,55 +1261,39 @@ def _render_sparkline_svg(values: list[float], up: bool, w: int = 140, h: int = 
 
 
 def _render_macro_bar(snapshots: list[IndicatorSnapshot]) -> str:
-    """매크로 4지표 — TradingView 라이브 미니 위젯 (실시간 갱신).
+    """매크로 4지표 한 줄 — KOSPI/KOSPI200/USDKRW/WTI 인라인 SVG 스파크라인.
 
-    snapshots는 fallback 정보용 (위젯 로드 실패 시 표시).
+    데이터: yfinance fetch + 24h 캐시. 일일 cron(18:00 KST)으로 자동 refresh.
     """
-    # TradingView 심볼 매핑 — 실제 위젯이 인식하는 형식
-    tv_symbols = [
-        ("KOSPI", "KRX:KOSPI", "한국 종합주가지수"),
-        ("KOSPI 200", "KRX:KOSPI200", "코스피 200"),
-        ("USD/KRW", "FX_IDC:USDKRW", "달러 원 환율"),
-        ("WTI Crude", "TVC:USOIL", "WTI 원유"),
-    ]
+    if not snapshots:
+        return ""
     cells: list[str] = []
-    for label, symbol, title in tv_symbols:
-        # 각 위젯은 고유한 컨테이너 — TradingView 스크립트가 child div에 iframe inject
-        # JSON config: 작고 깔끔한 라인 차트 + 가격 + 변화율
-        config = (
-            '{'
-            f'"symbol":"{symbol}",'
-            '"width":"100%",'
-            '"height":140,'
-            '"locale":"kr",'
-            '"dateRange":"12M",'
-            '"colorTheme":"light",'
-            '"trendLineColor":"rgba(20,33,61,1)",'
-            '"underLineColor":"rgba(20,33,61,0.12)",'
-            '"underLineBottomColor":"rgba(20,33,61,0)",'
-            '"isTransparent":true,'
-            '"autosize":false,'
-            '"largeChartUrl":"",'
-            '"chartOnly":false,'
-            '"noTimeScale":true'
-            '}'
+    for s in snapshots:
+        up = (s.change_pct_1d or 0) >= 0
+        spark = _render_sparkline_svg(s.sparkline, up=up)
+        change_color = "macro-up" if up else "macro-down"
+        change_1d_str = (
+            f"{'▲' if up else '▼'} {abs(s.change_pct_1d or 0):.2f}%"
+            if s.change_pct_1d is not None else "—"
+        )
+        change_1y_str = (
+            f"{s.change_pct_1y:+.1f}% (1Y)"
+            if s.change_pct_1y is not None else ""
         )
         cells.append(f"""
 <div class="macro-cell">
   <div class="macro-head">
-    <span class="macro-label">{escape(label)}</span>
-    <span class="macro-symbol">{escape(symbol.split(':', 1)[1])}</span>
+    <span class="macro-label">{escape(s.label)}</span>
+    <span class="macro-symbol">{escape(s.symbol)}</span>
   </div>
-  <div class="tv-widget-container">
-    <div class="tradingview-widget-container">
-      <div class="tradingview-widget-container__widget"></div>
-      <script type="text/javascript"
-        src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js"
-        async>{config}</script>
-    </div>
+  <div class="macro-value">{escape(s.latest_str)}</div>
+  {spark}
+  <div class="macro-changes">
+    <span class="{change_color}">{change_1d_str}</span>
+    <span class="macro-1y">{change_1y_str}</span>
   </div>
 </div>""")
-    return f'<div class="macro-bar macro-live">{"".join(cells)}</div>'
+    return f'<div class="macro-bar">{"".join(cells)}</div>'
 
 
 def _empty_card_html(company: str) -> str:
