@@ -640,13 +640,24 @@ def _wrap_html(title: str, body: str, breadcrumb: str = "") -> str:
 
 
 def _make_md() -> "markdown.Markdown":
-    """동일 인스턴스 재사용 (TOC 슬러그 일관성)."""
+    """동일 인스턴스 재사용 (TOC 슬러그 일관성).
+
+    한글 헤더 보존을 위해 slugify_unicode 명시.
+    기본 slugify는 unicodedata.normalize로 한글을 ASCII로 변환해서 깨짐.
+    """
+    from markdown.extensions.toc import slugify_unicode
     return markdown.Markdown(
         extensions=[
             "fenced_code", "tables", "footnotes", "attr_list",
             "toc", "sane_lists", "smarty",
         ],
-        extension_configs={"toc": {"toc_depth": "2-3", "anchorlink": False}},
+        extension_configs={
+            "toc": {
+                "toc_depth": "2-3",
+                "anchorlink": False,
+                "slugify": slugify_unicode,
+            }
+        },
     )
 
 
@@ -656,9 +667,9 @@ def _md_to_html(md_text: str) -> str:
 
 
 def _slugify_for_toc(title: str) -> str:
-    """markdown.extensions.toc와 동일한 슬러그 알고리즘."""
-    from markdown.extensions.toc import slugify
-    return slugify(title, "-")
+    """markdown.extensions.toc.slugify_unicode와 동일 — 한글 보존."""
+    from markdown.extensions.toc import slugify_unicode
+    return slugify_unicode(title, "-")
 
 
 def _period_to_friendly(period: str) -> str:
