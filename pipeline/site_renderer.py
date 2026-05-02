@@ -458,20 +458,125 @@ footer.site-footer {
 }
 footer.site-footer p { margin: 3px 0; }
 
-/* 모바일 */
+/* SCROLL-TO-TOP 버튼 */
+.scroll-top {
+  position: fixed;
+  right: 24px; bottom: 24px;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--accent); color: #fff;
+  border: none; cursor: pointer;
+  font-size: 22px; line-height: 1;
+  box-shadow: var(--shadow-md);
+  opacity: 0; transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 90;
+}
+.scroll-top.visible { opacity: 0.92; transform: translateY(0); pointer-events: auto; }
+.scroll-top:hover { opacity: 1; }
+
+/* TOC FAB (모바일·작은 화면에서 떠있는 목차 버튼) */
+.toc-fab {
+  display: none;
+  position: fixed; right: 24px; bottom: 80px;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--surface); color: var(--accent);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  align-items: center; justify-content: center;
+  box-shadow: var(--shadow-md);
+  z-index: 90;
+}
+.toc-fab:hover { background: var(--accent-light); }
+
+.toc-drawer {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(10,14,26,0.4);
+  z-index: 110;
+  align-items: stretch; justify-content: flex-end;
+}
+.toc-drawer.open { display: flex; }
+.toc-drawer-inner {
+  width: min(320px, 88vw);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  padding: 20px 22px 80px;
+  overflow-y: auto;
+}
+.toc-drawer-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.toc-drawer-head .toc-title {
+  font-family: var(--display);
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.toc-close {
+  width: 32px; height: 32px; border: none;
+  background: transparent; cursor: pointer;
+  font-size: 22px; color: var(--text-muted);
+  border-radius: var(--radius-sm);
+}
+.toc-close:hover { background: var(--surface-alt); color: var(--text); }
+.toc-drawer ul { list-style: none; padding: 0; margin: 0; }
+.toc-drawer ul ul { padding-left: 14px; margin: 4px 0; border-left: 1px solid var(--border-light); }
+.toc-drawer li { margin: 6px 0; }
+.toc-drawer a {
+  display: block; padding: 8px 10px;
+  color: var(--text-secondary); font-size: 14px;
+  font-weight: 500; border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+.toc-drawer a:hover { background: var(--surface-alt); color: var(--accent); }
+.toc-drawer ul ul a { font-size: 13px; font-weight: 400; color: var(--text-muted); }
+
+/* anchor scroll offset (sticky header 고려) */
+article.report h2, article.report h3 { scroll-margin-top: 80px; }
+
+/* 모바일 — 980px 이하 (TOC FAB 등장, sidebar 숨김) */
+@media (max-width: 980px) {
+  .report-layout { grid-template-columns: 1fr; }
+  .report-toc { display: none; }
+  .toc-fab { display: inline-flex; }
+}
+
+/* 모바일 — 720px 이하 */
 @media (max-width: 720px) {
+  .container { padding: 24px 16px; }
+  .site-header .inner { padding: 14px 16px; }
+  .site-header .brand { font-size: 15px; gap: 8px; }
+  .site-header .brand .badge { display: none; }
+  .site-header .brand .divider { display: none; }
+  .site-header nav a { margin-left: 0; }
   article.report { padding: 28px 22px; }
   article.report h1 { font-size: 22px; }
-  .page-hero { padding: 24px; }
-  .page-hero h1 { font-size: 24px; }
+  article.report h2 { font-size: 17px; padding-bottom: 6px; }
+  article.report h2::before { display: none; }
   article.report table { font-size: 12px; }
   article.report table th, article.report table td { padding: 7px 10px; }
+  .page-hero { padding: 28px 22px; }
+  .page-hero h1 { font-size: 24px; }
+  .page-hero .meta { gap: 16px; }
+  .scroll-top, .toc-fab { right: 14px; }
+  .scroll-top { bottom: 14px; }
+  .toc-fab { bottom: 70px; }
+  .report-card { padding: 16px 18px; }
+}
+
+/* 카드 그리드도 모바일 대응 */
+@media (max-width: 480px) {
+  .report-grid { grid-template-columns: 1fr; gap: 12px; }
 }
 """
 
 
 def _wrap_html(title: str, body: str, breadcrumb: str = "") -> str:
-    head_extra = ""
     return f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -486,13 +591,13 @@ def _wrap_html(title: str, body: str, breadcrumb: str = "") -> str:
 <body>
   <header class="site-header">
     <div class="inner">
-      <div class="brand">
+      <a class="brand" href="/projects/k-e-r/" title="전체 보고서">
         <span>K_E_R</span>
+        <span class="divider"></span>
         <span class="badge">Korea Equity Reports</span>
-      </div>
+      </a>
       <nav>
         <a href="/">soccz.github.io</a>
-        <a href="/projects/k-e-r/">전체 보고서</a>
       </nav>
     </div>
   </header>
@@ -504,19 +609,56 @@ def _wrap_html(title: str, body: str, breadcrumb: str = "") -> str:
     <p>K_E_R · DART 기반 자동 생성 · 출처 검증 + 추론 명시 + XBRL ground truth</p>
     <p style="margin-top:6px">생성: {datetime.now().strftime('%Y-%m-%d %H:%M %Z')}</p>
   </footer>
+  <button class="scroll-top" onclick="window.scrollTo({{top:0,behavior:'smooth'}})" aria-label="맨 위로">↑</button>
+  <script>
+    // scroll-to-top 버튼 visibility + smooth anchor scroll offset
+    (function(){{
+      var st = document.querySelector('.scroll-top');
+      if (st) window.addEventListener('scroll', function(){{
+        st.classList.toggle('visible', window.scrollY > 400);
+      }});
+      // anchor link → smooth scroll (with header offset)
+      document.querySelectorAll('a[href^="#"]').forEach(function(a){{
+        a.addEventListener('click', function(e){{
+          var id = a.getAttribute('href').slice(1);
+          if (!id) return;
+          var t = document.getElementById(id) || document.querySelector('[id="'+id+'"]');
+          if (!t) return;
+          e.preventDefault();
+          var top = t.getBoundingClientRect().top + window.scrollY - 70;
+          window.scrollTo({{top: top, behavior: 'smooth'}});
+          history.replaceState(null, '', '#'+id);
+          // close drawer if open
+          var dr = document.getElementById('tocDrawer');
+          if (dr) dr.classList.remove('open');
+        }});
+      }});
+    }})();
+  </script>
 </body>
 </html>"""
 
 
-def _md_to_html(md_text: str) -> str:
-    md = markdown.Markdown(
+def _make_md() -> "markdown.Markdown":
+    """동일 인스턴스 재사용 (TOC 슬러그 일관성)."""
+    return markdown.Markdown(
         extensions=[
             "fenced_code", "tables", "footnotes", "attr_list",
             "toc", "sane_lists", "smarty",
         ],
-        extension_configs={"toc": {"toc_depth": "2-3"}},
+        extension_configs={"toc": {"toc_depth": "2-3", "anchorlink": False}},
     )
+
+
+def _md_to_html(md_text: str) -> str:
+    md = _make_md()
     return md.convert(md_text)
+
+
+def _slugify_for_toc(title: str) -> str:
+    """markdown.extensions.toc와 동일한 슬러그 알고리즘."""
+    from markdown.extensions.toc import slugify
+    return slugify(title, "-")
 
 
 def _period_to_friendly(period: str) -> str:
@@ -562,9 +704,9 @@ def _extract_one_liner(md_text: str, max_len: int = 200) -> str:
 
 
 def _build_toc(md_text: str) -> str:
-    """본문 헤더(##, ###)에서 TOC sidebar HTML 생성."""
+    """본문 헤더(##, ###)에서 TOC sidebar HTML 생성. markdown TOC와 동일 슬러그."""
     import re
-    items: list[tuple[int, str, str]] = []  # (level, anchor, title)
+    items: list[tuple[int, str, str]] = []
     in_code = False
     for line in md_text.splitlines():
         if line.strip().startswith("```"):
@@ -577,25 +719,48 @@ def _build_toc(md_text: str) -> str:
             continue
         level = len(m.group(1))
         title = m.group(2).strip().rstrip("#").strip()
-        anchor = re.sub(r"[^\w가-힣\-]+", "-", title.lower()).strip("-")
+        anchor = _slugify_for_toc(title)
         items.append((level, anchor, title))
 
     if not items:
         return ""
-    out: list[str] = ['<aside class="report-toc"><div class="toc-title">목차</div><ul>']
-    current_level = 2
-    for lvl, anchor, title in items:
-        if lvl > current_level:
-            out.append("<ul>")
-        elif lvl < current_level:
+
+    def render_list(items: list, sidebar: bool = True) -> str:
+        out: list[str] = ["<ul>"]
+        current_level = 2
+        for lvl, anchor, title in items:
+            if lvl > current_level:
+                out.append("<ul>")
+            elif lvl < current_level:
+                out.append("</ul>")
+            current_level = lvl
+            out.append(f'<li><a href="#{escape(anchor)}">{escape(title)}</a></li>')
+        while current_level > 2:
             out.append("</ul>")
-        current_level = lvl
-        out.append(f'<li><a href="#{escape(anchor)}">{escape(title)}</a></li>')
-    while current_level > 2:
+            current_level -= 1
         out.append("</ul>")
-        current_level -= 1
-    out.append("</ul></aside>")
-    return "".join(out)
+        return "".join(out)
+
+    sidebar_html = (
+        '<aside class="report-toc">'
+        '<div class="toc-title">목차</div>'
+        + render_list(items)
+        + "</aside>"
+    )
+    drawer_html = (
+        '<div class="toc-drawer" id="tocDrawer" aria-hidden="true">'
+        '<div class="toc-drawer-inner">'
+        '<div class="toc-drawer-head">'
+        '<span class="toc-title">목차</span>'
+        '<button class="toc-close" onclick="document.getElementById(\'tocDrawer\').classList.remove(\'open\')" aria-label="닫기">×</button>'
+        '</div>'
+        + render_list(items)
+        + '</div></div>'
+        '<button class="toc-fab" onclick="document.getElementById(\'tocDrawer\').classList.toggle(\'open\')" aria-label="목차">'
+        '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="13" y2="18"/></svg>'
+        '</button>'
+    )
+    return sidebar_html + drawer_html
 
 
 def render_report_to_html(
