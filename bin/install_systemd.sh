@@ -40,7 +40,9 @@ chmod +x "$REPO_ROOT/bin/run_weekly.sh" "$REPO_ROOT/bin/run_weekend.sh"
 
 # 2. systemd unit 파일 복사
 mkdir -p "$USER_SYSTEMD_DIR"
-for f in k_e_r-weekday.service k_e_r-weekday.timer k_e_r-weekend.service k_e_r-weekend.timer; do
+for f in k_e_r-weekday.service k_e_r-weekday.timer \
+         k_e_r-weekend.service k_e_r-weekend.timer \
+         k_e_r-daily-refresh.service k_e_r-daily-refresh.timer; do
   cp "$REPO_ROOT/systemd/$f" "$USER_SYSTEMD_DIR/$f"
   echo "  installed: $USER_SYSTEMD_DIR/$f"
 done
@@ -51,7 +53,10 @@ echo "  systemctl --user daemon-reload"
 
 # 4. timer enable + start
 systemctl --user enable --now k_e_r-weekday.timer
-echo "  enabled: k_e_r-weekday.timer (Tue 22:00 KST)"
+echo "  enabled: k_e_r-weekday.timer (Tue 22:00 KST — 보고서 생성)"
+
+systemctl --user enable --now k_e_r-daily-refresh.timer
+echo "  enabled: k_e_r-daily-refresh.timer (매일 18:00 KST — 매크로 갱신)"
 
 # weekend는 주석 처리 — 산업노트 generator 구현 후 활성화
 # systemctl --user enable --now k_e_r-weekend.timer

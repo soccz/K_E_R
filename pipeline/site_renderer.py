@@ -16,9 +16,11 @@ from pathlib import Path
 import markdown
 
 from pipeline.watchlist_parser import WatchlistEntry, parse_watchlist
+from pipeline.macro_data import IndicatorSnapshot, load_macro_snapshot
 
 
 SITE_K_E_R_PATH = Path("/home/soccz/22tb/soccz.github.io/projects/k-e-r")
+MACRO_CACHE_PATH = Path("/home/soccz/22tb/report/pipeline/cache/macro_snapshot.json")
 
 
 @dataclass(frozen=True)
@@ -617,6 +619,73 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
   display: block;
 }
 
+/* ─────── Macro 지표 바 (KOSPI·KOSDAQ·USDKRW·WTI) ─────── */
+.macro-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  margin: 24px 0 4px;
+  padding: 20px 0 8px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
+}
+.macro-cell {
+  padding: 0 16px;
+  border-right: 1px solid var(--border-light);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.macro-cell:last-child { border-right: none; }
+.macro-cell:first-child { padding-left: 0; }
+.macro-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+}
+.macro-label {
+  font-family: var(--display);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.macro-symbol {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text-light); font-weight: 500;
+}
+.macro-value {
+  font-family: var(--display);
+  font-size: 22px; font-weight: 700;
+  letter-spacing: -0.015em; color: var(--text);
+  font-feature-settings: 'tnum';
+  line-height: 1.1;
+}
+.sparkline {
+  width: 100%; height: 32px;
+  display: block;
+  margin: 2px 0 2px;
+}
+.spark-line {
+  stroke-width: 1.5;
+  stroke-linejoin: round; stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.sparkline.spark-up .spark-line { stroke: var(--positive); }
+.sparkline.spark-up .spark-area { fill: var(--positive); opacity: 0.08; }
+.sparkline.spark-down .spark-line { stroke: var(--negative); }
+.sparkline.spark-down .spark-area { fill: var(--negative); opacity: 0.08; }
+.macro-changes {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 11px;
+  font-family: var(--mono);
+  font-feature-settings: 'tnum';
+}
+.macro-up { color: var(--positive); font-weight: 600; }
+.macro-down { color: var(--negative); font-weight: 600; }
+.macro-1y { color: var(--text-light); font-size: 10px; }
+
+@media (max-width: 720px) {
+  .macro-bar { grid-template-columns: repeat(2, 1fr); gap: 18px 0; padding: 16px 0; }
+  .macro-cell { padding: 0 10px; }
+  .macro-value { font-size: 18px; }
+}
+
 /* ─────── 마스터 인덱스 — Dashboard 표 레이아웃 ─────── */
 
 /* Hero stats — 4구획 숫자 */
@@ -1166,6 +1235,64 @@ def render_company_index(
     out_html_path.write_text(_wrap_html(title, body, breadcrumb), encoding="utf-8")
 
 
+def _render_sparkline_svg(values: list[float], up: bool, w: int = 140, h: int = 32) -> str:
+    """SVG 스파크라인 — 가벼운 인라인 차트."""
+    if not values or len(values) < 2:
+        return ""
+    vmin, vmax = min(values), max(values)
+    rng = vmax - vmin or 1.0
+    n = len(values)
+    pts: list[str] = []
+    for i, v in enumerate(values):
+        x = i / (n - 1) * w
+        y = h - ((v - vmin) / rng) * h
+        pts.append(f"{x:.1f},{y:.1f}")
+    poly_pts = " ".join(pts)
+    # area fill
+    area_pts = f"0,{h} " + poly_pts + f" {w},{h}"
+    color_class = "spark-up" if up else "spark-down"
+    return (
+        f'<svg viewBox="0 0 {w} {h}" class="sparkline {color_class}" '
+        f'preserveAspectRatio="none">'
+        f'<polygon points="{area_pts}" class="spark-area"/>'
+        f'<polyline points="{poly_pts}" class="spark-line" fill="none"/>'
+        f'</svg>'
+    )
+
+
+def _render_macro_bar(snapshots: list[IndicatorSnapshot]) -> str:
+    """매크로 4지표 한 줄 — KOSPI/KOSDAQ/USDKRW/WTI 스파크라인 + 1일·1년 변화."""
+    if not snapshots:
+        return ""
+    cells: list[str] = []
+    for s in snapshots:
+        up = (s.change_pct_1d or 0) >= 0
+        spark = _render_sparkline_svg(s.sparkline, up=up)
+        change_color = "macro-up" if up else "macro-down"
+        change_1d_str = (
+            f"{'▲' if up else '▼'} {abs(s.change_pct_1d or 0):.2f}%"
+            if s.change_pct_1d is not None else "—"
+        )
+        change_1y_str = (
+            f"{s.change_pct_1y:+.1f}% (1Y)"
+            if s.change_pct_1y is not None else ""
+        )
+        cells.append(f"""
+<div class="macro-cell">
+  <div class="macro-head">
+    <span class="macro-label">{escape(s.label)}</span>
+    <span class="macro-symbol">{escape(s.symbol)}</span>
+  </div>
+  <div class="macro-value">{escape(s.latest_str)}</div>
+  {spark}
+  <div class="macro-changes">
+    <span class="{change_color}">{change_1d_str}</span>
+    <span class="macro-1y">{change_1y_str}</span>
+  </div>
+</div>""")
+    return f'<div class="macro-bar">{"".join(cells)}</div>'
+
+
 def _empty_card_html(company: str) -> str:
     """보고서 아직 없는 종목용 placeholder 카드."""
     return f"""
@@ -1285,11 +1412,15 @@ def render_master_index(
                     f'</tr>'
                 )
 
+    macro_snaps = load_macro_snapshot(MACRO_CACHE_PATH)
+    macro_html = _render_macro_bar(macro_snaps)
+
     body = f"""
 <div class="page-hero">
   <span class="doc-tag">Equity Research Pipeline</span>
   <h1>K_E_R — Korea Equity Reports</h1>
   <p class="subtitle">DART 기반 한국 상장사 종합 진단. 출처 엄격주의 + 추론 명시 + XBRL ground truth.</p>
+  {macro_html}
   <div class="hero-stats">
     <div class="stat"><span class="stat-num">{n_total}</span><span class="stat-lbl">종목</span></div>
     <div class="stat"><span class="stat-num">{n_with_reports}</span><span class="stat-lbl">진단 완료</span></div>

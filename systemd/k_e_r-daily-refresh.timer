@@ -1,0 +1,13 @@
+[Unit]
+Description=K_E_R daily refresh — 매크로 데이터 + 사이트 재빌드 (18:00 KST)
+Documentation=https://github.com/soccz/K_E_R
+
+[Timer]
+# 매일 18:00 KST — 한국 시장 마감 후 매크로 신선
+OnCalendar=*-*-* 18:00:00
+Persistent=true
+RandomizedDelaySec=180
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
