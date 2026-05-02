@@ -619,13 +619,24 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
 """
 
 
-def _wrap_html(title: str, body: str, breadcrumb: str = "") -> str:
+def _wrap_html(title: str, body: str, breadcrumb: str = "", description: str = "") -> str:
+    desc = description or "DART 기반 한국 상장사 종합 진단. 출처 검증 + 추론 명시 + XBRL ground truth."
     return f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="{escape(desc)}">
+  <meta name="theme-color" content="#14213d">
   <title>{escape(title)}</title>
+  <meta property="og:title" content="{escape(title)}">
+  <meta property="og:description" content="{escape(desc)}">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="K_E_R — Korea Equity Reports">
+  <meta property="og:image" content="https://soccz.github.io/assets/og-image.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
@@ -889,8 +900,12 @@ def render_report_to_html(
 </div>"""
 
     title = f"{company} {friendly} — K_E_R"
+    summary_for_meta = _extract_one_liner(md_text, max_len=160)
     out_html_path.parent.mkdir(parents=True, exist_ok=True)
-    out_html_path.write_text(_wrap_html(title, body, breadcrumb), encoding="utf-8")
+    out_html_path.write_text(
+        _wrap_html(title, body, breadcrumb, description=summary_for_meta),
+        encoding="utf-8",
+    )
 
 
 def render_company_index(
@@ -1081,10 +1096,10 @@ def render_master_index(
 
 
 def discover_reports(companies_dir: Path) -> dict[str, list[ReportEntry]]:
-    """companies/<기업명>/<period>/ 트리에서 00_종합진단.md (또는 01_*.md) 찾기.
+    """companies/<기업명>/<period>/ 트리에서 합본(00) 또는 첫 섹션(01)만 찾기.
 
-    각 보고서의 entry 구성: company, period, title, summary, paths.
-    합본 우선, 없으면 첫 섹션.
+    *명시적 제외*: .v2_warnings.md, _meta.json, raw_inputs/, sections_*/
+    site에 노출되는 건 *최종 deliverable*만.
     """
     out: dict[str, list[ReportEntry]] = {}
     if not companies_dir.exists():
@@ -1099,11 +1114,15 @@ def discover_reports(companies_dir: Path) -> dict[str, list[ReportEntry]]:
             if not period_dir.is_dir():
                 continue
             period = period_dir.name
+            # 합본 우선, 없으면 첫 섹션. v2_warnings는 절대 picked up되지 않게.
             md_candidates = [
                 period_dir / "00_종합진단.md",
                 period_dir / "01_사업구조진단.md",
             ]
-            md_path = next((p for p in md_candidates if p.exists()), None)
+            md_path = next(
+                (p for p in md_candidates if p.exists() and ".v2_warnings" not in p.name),
+                None,
+            )
             if md_path is None:
                 continue
 
@@ -1111,7 +1130,11 @@ def discover_reports(companies_dir: Path) -> dict[str, list[ReportEntry]]:
             summary = _extract_one_liner(md_text)
             written_at = datetime.fromtimestamp(md_path.stat().st_mtime).strftime("%Y-%m-%d")
             html_rel = f"{period}/index.html"
-            title = f"{company} {period} 종합진단" if md_path.name.startswith("00_") else f"{company} {period} (부분)"
+            is_assembled = md_path.name.startswith("00_")
+            title = (
+                f"{company} {period} 종합진단" if is_assembled
+                else f"{company} {period} (부분)"
+            )
             entries.append(
                 ReportEntry(
                     company=company,
@@ -1128,23 +1151,37 @@ def discover_reports(companies_dir: Path) -> dict[str, list[ReportEntry]]:
     return out
 
 
+def _file_needs_rerender(src: Path, dst: Path) -> bool:
+    """src(.md)가 dst(.html)보다 새로우면 rerender 필요."""
+    if not dst.exists():
+        return True
+    return src.stat().st_mtime > dst.stat().st_mtime
+
+
 def render_all(
     companies_dir: Path,
     site_root: Path,
     watchlist_path: Path | None = None,
-) -> tuple[int, int]:
+    incremental: bool = True,
+) -> tuple[int, int, int]:
     """전체 변환 — companies → site_root/projects/k-e-r/.
+
+    incremental=True: MD가 HTML보다 새로운 것만 다시 렌더 (대량 보고서 시 빠름).
     워치리스트 path 주면 마스터 인덱스에 24종목 전부 표시 (placeholder 포함).
-    반환: (회사 수, 보고서 수)
+    반환: (회사 수, 발견된 보고서 수, 실제 렌더된 수)
     """
     discovered = discover_reports(companies_dir)
     site_root.mkdir(parents=True, exist_ok=True)
 
     total_reports = 0
+    rendered = 0
     for company, entries in discovered.items():
         company_html_dir = site_root / company
         for entry in entries:
             html_path = company_html_dir / entry.period / "index.html"
+            total_reports += 1
+            if incremental and not _file_needs_rerender(entry.md_path, html_path):
+                continue
             render_report_to_html(
                 md_path=entry.md_path,
                 out_html_path=html_path,
@@ -1152,7 +1189,8 @@ def render_all(
                 period=entry.period,
                 written_at=entry.written_at,
             )
-            total_reports += 1
+            rendered += 1
+        # 회사 인덱스는 항상 다시 (정렬·count 변경 가능)
         company_index = company_html_dir / "index.html"
         render_company_index(company, company_html_dir, company_index, entries)
 
@@ -1160,6 +1198,7 @@ def render_all(
     if watchlist_path and watchlist_path.exists():
         watchlist = parse_watchlist(watchlist_path.read_text(encoding="utf-8"))
 
+    # 마스터 인덱스는 항상 다시 (워치리스트 placeholder 포함)
     master = site_root / "index.html"
     render_master_index(master, discovered, watchlist=watchlist)
-    return len(discovered), total_reports
+    return len(discovered), total_reports, rendered

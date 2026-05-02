@@ -23,17 +23,22 @@ if [ ! -x .venv/bin/python ]; then
 fi
 
 echo "[publish] companies/ → HTML 렌더 → $SITE_KER_DIR"
-.venv/bin/python -c "
+if ! .venv/bin/python -c "
 from pathlib import Path
 from pipeline.site_renderer import render_all
-n_companies, n_reports = render_all(
+n_companies, n_reports, n_rendered = render_all(
     Path('companies'),
     Path('$SITE_KER_DIR'),
     watchlist_path=Path('_watchlist.md'),
+    incremental=True,
 )
-print(f'  rendered: {n_companies} companies with reports, {n_reports} reports total')
-print(f'  master index: 워치리스트 24종목 + placeholder 포함')
-"
+print(f'  발견: {n_companies} companies, {n_reports} reports')
+print(f'  렌더: {n_rendered} (incremental — 변경된 것만)')
+print(f'  마스터 인덱스: 워치리스트 24종목 + placeholder')
+" 2>&1; then
+  echo "[publish] 렌더 실패 — push 차단"
+  exit 1
+fi
 
 # soccz.github.io repo commit + push
 cd "$SITE_ROOT"

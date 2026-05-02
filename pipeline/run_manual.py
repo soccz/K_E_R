@@ -32,6 +32,7 @@ from pipeline.prompt_builder import (
     build_section_system_prompt,
     build_section_user_prompt,
 )
+from pipeline.report_assembler import assemble_report
 from pipeline.section_builder import (
     SectionBuildError,
     generate_section_with_validation,
@@ -150,7 +151,19 @@ def main() -> int:
         default=None,
         help="데이터 기준시점 박스의 재무제표 표기 (기본: period에서 유추)",
     )
+    parser.add_argument(
+        "--assemble",
+        action="store_true",
+        help="모든 섹션 성공 후 00_종합진단.md 합본 작성 (--section all 시 자동 ON)",
+    )
+    parser.add_argument(
+        "--no-owner-summary",
+        action="store_true",
+        help="합본의 owner-valuation 한 페이지 LLM 호출 skip (속도용)",
+    )
     args = parser.parse_args()
+    if args.section == "all":
+        args.assemble = True
 
     print(f"provider: {config.LLM_PROVIDER}")
     print(f"model:    {config.CLAUDE_CODE_MODEL if config.LLM_PROVIDER == 'claude_code' else config.ANTHROPIC_MODEL}")
@@ -222,6 +235,20 @@ def main() -> int:
     print(f"\n{'='*50}")
     print(f"완료: {len(sections)}개 섹션 모두 검증 통과")
     print(f"위치: {report_dir}")
+
+    if args.assemble:
+        print(f"\n{'='*50}")
+        print(f"합본 작성 중...")
+        target = assemble_report(
+            report_dir=report_dir,
+            company=args.company,
+            period=args.period,
+            timestamps=timestamps,
+            frame=frame,
+            write_owner_summary=not args.no_owner_summary,
+        )
+        print(f"합본 완료: {target}")
+
     return 0
 
 
