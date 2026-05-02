@@ -573,6 +573,49 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
 @media (max-width: 480px) {
   .report-grid { grid-template-columns: 1fr; gap: 12px; }
 }
+
+/* 회사 인덱스 정렬 토글 */
+.list-controls {
+  display: flex; align-items: center; gap: 16px;
+  margin: 24px 0 16px; padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.list-controls-label {
+  color: var(--text-muted);
+  font-family: var(--display);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: 11px; font-weight: 600;
+}
+.list-controls-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-family: var(--mono); font-size: 12px;
+}
+.sort-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+.sort-btn {
+  padding: 7px 16px;
+  border: none; background: transparent;
+  color: var(--text-muted); cursor: pointer;
+  font-size: 13px; font-weight: 500;
+  font-family: var(--sans);
+  transition: background 0.15s, color 0.15s;
+}
+.sort-btn + .sort-btn { border-left: 1px solid var(--border); }
+.sort-btn:hover { background: var(--surface-alt); color: var(--text); }
+.sort-btn.active {
+  background: var(--accent); color: #fff;
+}
+.report-card-link {
+  text-decoration: none; color: inherit;
+  display: block;
+}
 """
 
 
@@ -696,10 +739,34 @@ def _period_to_friendly(period: str) -> str:
 
 
 def _extract_one_liner(md_text: str, max_len: int = 200) -> str:
-    """첫 의미 단락 (헤더·메타박스 제외)."""
+    """첫 *의미 단락* — 헤더·메타박스·TOC·코드블럭 모두 스킵하고 실제 산문 추출.
+
+    합본의 "30초 회사 소개" 단락이 가장 유용. 그게 안 잡히면 첫 산문.
+    """
+    import re
+
+    # 1. "30초 회사 소개" 또는 "회사 소개" 섹션 *이후*의 첫 단락 우선 시도
+    soco_match = re.search(
+        r"(?:30초\s*회사\s*소개|회사\s*소개)\s*\n+([^\n#].+?)(?:\n\n|\n#)",
+        md_text, re.DOTALL,
+    )
+    if soco_match:
+        para = soco_match.group(1).strip()
+        # 마크다운 링크 [text](url) → text만
+        para = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", para)
+        if len(para) >= 20:
+            return para[:max_len] + ("…" if len(para) > max_len else "")
+
+    # 2. 일반 fallback — 첫 산문 단락
     in_box = False
+    in_code = False
     for raw in md_text.splitlines():
         s = raw.strip()
+        if s.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            continue
         if s.startswith("> **데이터 기준시점**") or (in_box and s.startswith(">")):
             in_box = True
             continue
@@ -707,10 +774,16 @@ def _extract_one_liner(md_text: str, max_len: int = 200) -> str:
             in_box = False
         if not s or s.startswith("#") or s.startswith("---") or s.startswith(">"):
             continue
-        if len(s) >= 20:
-            if len(s) > max_len:
-                return s[:max_len] + "…"
-            return s
+        # TOC-like 링크 list 스킵: "- [text](url)" 형식
+        if re.match(r"^[-*+]\s*\[.+\]\(.+\)\s*$", s):
+            continue
+        # 일반 list item이지만 짧은 건 스킵
+        if s.startswith(("-", "*", "+")) and len(s) < 40:
+            continue
+        # 마크다운 링크 → 텍스트로 변환
+        s_clean = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
+        if len(s_clean) >= 20:
+            return s_clean[:max_len] + ("…" if len(s_clean) > max_len else "")
     return ""
 
 
@@ -826,12 +899,18 @@ def render_company_index(
     out_html_path: Path,
     entries: list[ReportEntry],
 ) -> None:
+    """회사별 보고서 목록 — 정렬 토글(최신순/과거순) 포함."""
+    sorted_entries = sorted(entries, key=lambda x: x.period, reverse=True)
     cards: list[str] = []
-    for e in sorted(entries, key=lambda x: x.period, reverse=True):
+    for idx, e in enumerate(sorted_entries):
         friendly = _period_to_friendly(e.period)
         cards.append(
             f"""
-<a href="{escape(e.html_rel_path)}" style="text-decoration:none;color:inherit;">
+<a href="{escape(e.html_rel_path)}"
+   class="report-card-link"
+   data-period="{escape(e.period)}"
+   data-written="{escape(e.written_at)}"
+   data-order="{idx}">
   <div class="report-card">
     <span class="badge">{escape(e.period)}</span>
     <h3>{escape(friendly)}</h3>
@@ -846,17 +925,44 @@ def render_company_index(
 
     body = f"""
 <div class="page-hero">
+  <span class="doc-tag">Issuer Coverage</span>
   <h1>{escape(company)}</h1>
-  <p style="color:var(--text-secondary)">분기·연간 종합 진단 누적 ({len(entries)}건)</p>
+  <p class="subtitle">분기·연간 종합 진단 — 누적 {len(entries)}건</p>
 </div>
 
-<div class="report-grid">
+<div class="list-controls">
+  <span class="list-controls-label">정렬</span>
+  <div class="sort-toggle" role="tablist">
+    <button class="sort-btn active" data-sort="newest" onclick="window.kerSort('newest')">최신순</button>
+    <button class="sort-btn" data-sort="oldest" onclick="window.kerSort('oldest')">과거순</button>
+  </div>
+  <span class="list-controls-count">{len(entries)}건</span>
+</div>
+
+<div class="report-grid" id="reportGrid">
   {''.join(cards)}
-</div>"""
+</div>
+
+<script>
+  window.kerSort = function(mode) {{
+    var grid = document.getElementById('reportGrid');
+    var items = Array.from(grid.querySelectorAll('.report-card-link'));
+    items.sort(function(a, b) {{
+      var pa = a.dataset.period, pb = b.dataset.period;
+      return mode === 'oldest' ? pa.localeCompare(pb) : pb.localeCompare(pa);
+    }});
+    items.forEach(function(el) {{ grid.appendChild(el); }});
+    document.querySelectorAll('.sort-btn').forEach(function(b) {{
+      b.classList.toggle('active', b.dataset.sort === mode);
+    }});
+  }};
+</script>"""
 
     breadcrumb = f"""
-<div class="container" style="padding-top:20px; padding-bottom:0; font-size:14px; color:var(--text-muted);">
-  <a href="../index.html">← K_E_R 전체 보고서</a> &nbsp;·&nbsp; {escape(company)}
+<div class="container" style="padding-top:24px; padding-bottom:0; font-size:12px; color:var(--text-muted); letter-spacing:0.04em;">
+  <a href="../index.html" style="color:var(--text-muted)">K_E_R</a>
+  &nbsp;/&nbsp;
+  <span style="color:var(--text-secondary)">{escape(company)}</span>
 </div>"""
 
     title = f"{company} — K_E_R"
@@ -879,21 +985,24 @@ def _empty_card_html(company: str) -> str:
 
 
 def _company_card_html(company: str, entries: list[ReportEntry]) -> str:
-    """해당 회사의 최신 1개 보고서 카드."""
+    """마스터 카드 — 회사 인덱스(보고서 목록)로 이동.
+
+    개별 보고서는 회사 인덱스에서 선택해서 들어감 (정렬·필터 가능한 단계).
+    """
     latest = sorted(entries, key=lambda x: x.period, reverse=True)[0]
     friendly = _period_to_friendly(latest.period)
-    href = f"{company}/{latest.html_rel_path}"
+    href = f"{company}/index.html"
     sub_count = len(entries)
-    sub_text = f"{sub_count}건 누적" if sub_count > 1 else "최신"
+    count_label = f"{sub_count}건 누적" if sub_count > 1 else "1건"
     return f"""
 <a href="{escape(href)}" style="text-decoration:none;color:inherit;">
   <div class="report-card">
-    <span class="badge">{escape(latest.period)}</span>
+    <span class="badge">{escape(latest.period)} · {escape(friendly)}</span>
     <h3>{escape(company)}</h3>
     <p class="desc">{escape(latest.summary)}</p>
     <div class="meta">
-      <span>{escape(latest.written_at)} · {sub_text}</span>
-      <span>→ {escape(friendly)}</span>
+      <span>최신 {escape(latest.written_at)}</span>
+      <span>→ {count_label} 모두 보기</span>
     </div>
   </div>
 </a>"""
