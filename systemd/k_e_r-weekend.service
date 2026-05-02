@@ -1,0 +1,18 @@
+[Unit]
+Description=K_E_R weekend industry note
+Documentation=https://github.com/soccz/K_E_R
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/soccz/22tb/report
+EnvironmentFile=/home/soccz/22tb/report/.env
+ExecStart=/home/soccz/22tb/report/bin/run_weekend.sh
+StandardOutput=append:/home/soccz/22tb/report/logs/weekend.log
+StandardError=append:/home/soccz/22tb/report/logs/weekend.log
+TimeoutStartSec=3600
+Nice=10
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,73 @@
+# =============================================================
+# 1. SECRETS — 절대 커밋 금지 (위반 시 키 즉시 rotate)
+# =============================================================
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials/
+.netrc
+.aws/credentials
+
+# Claude Code / Anthropic 세션·인증 파일
+.anthropic*
+.claude/
+.claude_session*
+
+# =============================================================
+# 2. 로그 — 키가 우연히 박힐 수 있음
+# =============================================================
+*.log
+cron.log
+logs/
+
+# =============================================================
+# 3. 임시·캐시
+# =============================================================
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+node_modules/
+.venv/
+venv/
+env/
+*.egg-info/
+*.swp
+*~
+
+# =============================================================
+# 4. IDE·에디터
+# =============================================================
+.vscode/
+.idea/
+*.iml
+.cursor/
+
+# =============================================================
+# 5. DART 원문 캐시·대용량
+# =============================================================
+pipeline/cache/
+pipeline/raw/
+
+# 보고서 폴더의 raw 입력 중 *대용량·재생성 가능*한 것만 제외
+# (이유: DART API로 언제든 재다운로드 가능, git history 비대 방지)
+companies/**/raw_inputs/dart_filings/*.pdf
+companies/**/raw_inputs/dart_filings/*.zip
+companies/**/raw_inputs/dart_filings/*.hwp
+companies/**/raw_inputs/dart_filings/*.hwpx
+companies/**/raw_inputs/dart_filings/*.html
+companies/**/raw_inputs/dart_filings/*.htm
+companies/**/raw_inputs/xbrl/
+
+# 단, 보고서 본문(.md)·프롬프트 스냅샷(.md)·메타(.json)·산출물(sections_*)은 *반드시* commit
+# (audit trail의 핵심)

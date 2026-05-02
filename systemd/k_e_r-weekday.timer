@@ -1,0 +1,16 @@
+[Unit]
+Description=K_E_R weekday — Tue 22:00 KST
+Documentation=https://github.com/soccz/K_E_R
+
+[Timer]
+# 매주 화요일 22:00 KST (서버 timezone이 Asia/Seoul이므로 local time)
+OnCalendar=Tue *-*-* 22:00:00
+# 슬롯 시간에 컴퓨터가 꺼져있었으면 부팅 즉시 catch-up
+Persistent=true
+# 같은 시간에 시스템 부하 분산 (60초 내 랜덤 지연)
+RandomizedDelaySec=60
+# 시간 동기화 안 된 상태에서 부팅 직후 트리거 방지
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

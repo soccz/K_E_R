@@ -1,0 +1,29 @@
+"""환경변수·경로 설정. 모든 모듈의 single source of truth."""
+import os
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+FRAME_PATH = REPO_ROOT / "_frame.md"
+PERSONA_PATH = REPO_ROOT / "_persona.md"
+WATCHLIST_PATH = REPO_ROOT / "_watchlist.md"
+COMPANIES_DIR = REPO_ROOT / "companies"
+INDUSTRY_NOTES_DIR = REPO_ROOT / "industry_notes"
+INDEX_PATH = REPO_ROOT / "_index.md"
+GLOSSARY_PATH = REPO_ROOT / "_glossary.md"
+
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "claude_code")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+CLAUDE_CODE_BIN = os.getenv("CLAUDE_CODE_BIN", "claude")
+CLAUDE_CODE_MODEL = os.getenv("CLAUDE_CODE_MODEL", "sonnet")
+CLAUDE_CODE_TIMEOUT_SEC = int(os.getenv("CLAUDE_CODE_TIMEOUT_SEC", "600"))
+CLAUDE_CODE_NEUTRAL_CWD = os.getenv("CLAUDE_CODE_NEUTRAL_CWD", "/tmp")
+
+DART_API_KEY = os.getenv("DART_API_KEY")
+DART_BASE_URL = "https://opendart.fss.or.kr/api"
+
+VALIDATOR_MAX_RETRIES = int(os.getenv("VALIDATOR_MAX_RETRIES", "3"))
+
+ALLOWED_PROVIDERS_PHASE1 = {"anthropic", "claude_code"}
