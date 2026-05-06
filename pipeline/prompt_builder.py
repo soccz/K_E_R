@@ -151,10 +151,21 @@ def build_section_user_prompt(
     timestamps: DataTimestamps,
     dart_data: dict[str, Any],
     market_data: dict[str, Any],
+    source_pack_summary: dict[str, Any] | None = None,
 ) -> str:
-    return (
+    parts = [
         f"# 분석 대상 회사\n{company_name}\n\n"
         f"# 데이터 기준시점\n{timestamps.render_box()}\n\n"
+    ]
+    if source_pack_summary is not None:
+        parts.append(
+            f"# XBRL 핵심 재무 데이터 (우선 사용)\n```json\n"
+            f"{json.dumps(source_pack_summary, ensure_ascii=False, indent=2)}\n"
+            f"```\n\n"
+            f"재무 숫자 사실 주장은 위 XBRL 핵심 데이터와 DART 원문을 최우선 근거로 사용해라. "
+            f"위 데이터와 맞지 않는 학습기반 숫자 추정은 금지한다.\n\n"
+        )
+    parts.append(
         f"# DART 공시 데이터\n```json\n"
         f"{json.dumps(dart_data, ensure_ascii=False, indent=2)}\n"
         f"```\n\n"
@@ -164,6 +175,7 @@ def build_section_user_prompt(
         f"위 데이터를 근거로 자기 섹션을 작성해라. "
         f"데이터에 없는 사실은 출처가 없는 것이다 — 추론으로 표시하거나 빼라."
     )
+    return "".join(parts)
 
 
 def build_retry_user_prompt(original_user_prompt: str, validator_feedback: str) -> str:

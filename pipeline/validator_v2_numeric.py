@@ -99,6 +99,30 @@ def validate_numeric_claims(text: str, pack: SourcePack) -> ValidationResult:
         if direct:
             continue
 
+        sign_insensitive = _find_abs_value(pack, claim.value, tolerance_pct=0.03)
+        if sign_insensitive:
+            sample = sign_insensitive[0]
+            sample_label = pack.label_for(sample.concept) or sample.concept.split(":")[-1]
+            sample_period = (
+                f"{sample.period_start}~{sample.period_end}"
+                if sample.period_start
+                else sample.period_end or ""
+            )
+            warnings.append(
+                Violation(
+                    severity="warn",
+                    category="numeric_abs_or_rounded_match",
+                    line=claim.line_no,
+                    snippet=claim.context[:150],
+                    message=(
+                        f"숫자 '{claim.text}'는 절대값 또는 반올림 기준 source_pack에 근접 매치됩니다. "
+                        f"현금유출/지급 개념의 표시 부호 차이나 파생 계산값일 수 있으므로 검토 필요. "
+                        f"가까운 fact: '{sample_label}' = {sample.value:.3g} ({sample_period})"
+                    ),
+                )
+            )
+            continue
+
         scaled = pack.find_with_scales(claim.value)
         if scaled:
             scale_str = " 또는 ".join(f"{s}x" for s in sorted(scaled.keys()))
@@ -141,6 +165,14 @@ def validate_numeric_claims(text: str, pack: SourcePack) -> ValidationResult:
         failures=[],
         warnings=warnings,
     )
+
+
+def _find_abs_value(pack: SourcePack, value: float, tolerance_pct: float = 0.01):
+    if hasattr(pack, "find_abs_value"):
+        return pack.find_abs_value(value, tolerance_pct=tolerance_pct)
+    target = abs(value)
+    tol = max(target * tolerance_pct, 1.0)
+    return [f for f in pack.facts if abs(abs(f.value) - target) <= tol]
 
 
 def render_numeric_failures_for_retry(result: ValidationResult) -> str:

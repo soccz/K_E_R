@@ -90,7 +90,13 @@ def generate_section_with_validation(
 
     system_prompt = prompt_builder.build_section_system_prompt(frame, section_id)
     user_prompt = prompt_builder.build_section_user_prompt(
-        company_name, timestamps, dart_data, market_data
+        company_name,
+        timestamps,
+        dart_data,
+        market_data,
+        source_pack_summary=(
+            source_pack.to_prompt_summary() if source_pack is not None else None
+        ),
     )
 
     raw_outputs: list[str] = []

@@ -54,6 +54,30 @@ def test_user_prompt_renders_timestamps_box():
     assert "2026-05-02 21:10 KST" in user
 
 
+def test_user_prompt_includes_xbrl_summary_when_given():
+    ts = DataTimestamps(
+        written_at="2026-05-02",
+        dart_query_at="2026-05-02 21:10 KST",
+        financial_basis="2025 사업보고서",
+        market_price="(미포함)",
+        foreign_holding="(미포함)",
+        macro_data="(미포함)",
+    )
+    user = build_section_user_prompt(
+        company_name="SK하이닉스",
+        timestamps=ts,
+        dart_data={"filings": [{"name": "report.xml", "text": "본문"}]},
+        market_data={},
+        source_pack_summary={
+            "core_consolidated_facts": [
+                {"label": "수익(매출액)", "value_trillion_krw": 97.1467}
+            ]
+        },
+    )
+    assert "XBRL 핵심 재무 데이터" in user
+    assert "97.1467" in user
+
+
 def test_retry_prompt_appends_feedback():
     original = "원본 유저 프롬프트"
     feedback = "vague_source 위반"

@@ -2,7 +2,10 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(REPO_ROOT / ".env", override=False)
 
 FRAME_PATH = REPO_ROOT / "_frame.md"
 PERSONA_PATH = REPO_ROOT / "_persona.md"

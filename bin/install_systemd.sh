@@ -58,9 +58,8 @@ echo "  enabled: k_e_r-weekday.timer (Tue 22:00 KST — 보고서 생성)"
 systemctl --user enable --now k_e_r-daily-refresh.timer
 echo "  enabled: k_e_r-daily-refresh.timer (매일 18:00 KST — 매크로 갱신)"
 
-# weekend는 주석 처리 — 산업노트 generator 구현 후 활성화
-# systemctl --user enable --now k_e_r-weekend.timer
-echo "  weekend timer는 stub 상태 — 산업노트 generator 구현 후 'systemctl --user enable --now k_e_r-weekend.timer'"
+systemctl --user enable --now k_e_r-weekend.timer
+echo "  enabled: k_e_r-weekend.timer (Sun 21:00 KST — 종목 보고서 대체. 산업노트 generator 구현 후 진짜 산업노트로 전환)"
 
 # 5. 로그인 안 된 상태에서도 user service 동작 (lingering)
 # 이게 핵심 — 이거 없으면 user 로그아웃 시 timer 멈춤

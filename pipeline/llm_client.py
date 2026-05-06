@@ -68,7 +68,7 @@ class _ClaudeCodeBackend:
             if result.returncode != 0:
                 raise RuntimeError(
                     f"claude CLI failed (rc={result.returncode}): "
-                    f"stderr={result.stderr[:1000]}"
+                    f"stdout={result.stdout[:1000]} stderr={result.stderr[:1000]}"
                 )
             return result.stdout
         finally:

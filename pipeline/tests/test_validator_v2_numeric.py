@@ -138,6 +138,14 @@ def test_negative_value_match():
     assert result.passed
 
 
+def test_abs_or_rounded_match_warns_without_scale_mismatch():
+    pack = _MockPack([_MockFact("PaymentsToAcquirePPE", 27.52e12)])
+    result = validate_numeric_claims("유형자산 취득 현금흐름은 -27.52조원", pack)
+    cats = [w.category for w in result.warnings]
+    assert "numeric_abs_or_rounded_match" in cats
+    assert "numeric_scale_mismatch" not in cats
+
+
 def test_render_retry_returns_empty_in_v0_1():
     """v0.1: failures=[]라 render_numeric_failures_for_retry는 empty 반환."""
     pack = _MockPack([_MockFact("OperatingIncome", 15.094e12)])
@@ -174,3 +182,22 @@ def test_real_samsung_xbrl_integration():
     # 알려진 사실: 별도 매출 238.043조 → 직접 매치
     result = validate_numeric_claims("별도 매출 238.0조원", pack)
     assert result.passed, "238.0조 should match XBRL 238.043조"
+
+
+def test_real_sk_hynix_rounded_negative_match():
+    from pathlib import Path
+    from pipeline.source_pack import build_source_pack
+
+    xbrl_dir = Path(__file__).resolve().parents[2] / "companies/SK하이닉스/2025-annual/raw_inputs/xbrl"
+    if not xbrl_dir.exists():
+        import pytest
+        pytest.skip("SK Hynix XBRL not available")
+
+    pack = build_source_pack(xbrl_dir, "SK하이닉스", "2025-annual")
+    result = validate_numeric_claims("2023년 매출총이익은 -0.53조원이었다.", pack)
+    assert result.passed
+    assert not any(w.category == "numeric_scale_mismatch" for w in result.warnings)
+
+    result = validate_numeric_claims("2024년 Capex는 16.7조원으로 추정된다.", pack)
+    assert result.passed
+    assert not any(w.category == "numeric_scale_mismatch" for w in result.warnings)

@@ -31,6 +31,7 @@ from pipeline.dart_client import DartClient, REPRT_CODE_LABELS
 from pipeline.frame_loader import load_frame
 from pipeline.local_data_loader import load_local_dart_data
 from pipeline.prompt_builder import SECTION_SPECS, DataTimestamps
+from pipeline import report_quality
 from pipeline.report_assembler import assemble_report
 from pipeline.section_builder import (
     SectionBuildError,
@@ -120,11 +121,16 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         print(f"ERROR: {dart_dir} 비어있음 (--skip-fetch 사용 시 미리 데이터 필요)")
         return 1
 
-    dart_data = load_local_dart_data(dart_dir, max_chars=args.max_chars)
+    dart_data = load_local_dart_data(
+        dart_dir,
+        max_chars=args.max_chars,
+        max_total_chars=args.max_total_chars,
+    )
     print(f"\nDART 데이터: {len(dart_data['filings'])} 파일")
     for f in dart_data["filings"]:
         flag = " [TRUNCATED]" if f["truncated"] else ""
-        print(f"  - {f['name']}: {f['text_chars']:,} chars{flag}")
+        loaded = f.get("loaded_chars", len(f.get("text", "")))
+        print(f"  - {f['name']}: {loaded:,}/{f['text_chars']:,} chars{flag}")
 
     source_pack: SourcePack | None = None
     if xbrl_dir.exists() and any(xbrl_dir.glob("*.xbrl")):
@@ -132,7 +138,20 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         source_pack = build_source_pack(xbrl_dir, company, args.period)
         print(f"  facts: {len(source_pack.facts):,}, labels: {len(source_pack.xbrl.label_map):,}")
     else:
-        print(f"\nXBRL 없음 → V2 validator skip")
+        print(f"\nXBRL 없음")
+
+    input_guard = report_quality.validate_generation_inputs(
+        dart_data,
+        source_pack,
+        require_xbrl=not args.allow_missing_xbrl,
+    )
+    if not input_guard.passed:
+        print(f"\nERROR: 입력 품질 가드 실패")
+        print(input_guard.render())
+        return 1
+    if input_guard.warnings:
+        print(f"\n입력 품질 가드 경고")
+        print(input_guard.render())
 
     market_data = {"note": "auto mode (DART only) — 시장 데이터는 별도 보강"}
     today = datetime.now().strftime("%Y-%m-%d")
@@ -171,6 +190,29 @@ def _cmd_generate(args: argparse.Namespace) -> int:
             failed_any = True
             continue
 
+        text_guard = report_quality.validate_generated_text(result.final_text)
+        if not text_guard.passed:
+            print(f"  FAILED quality guard")
+            print(text_guard.render())
+            for i, raw in enumerate(result.raw_outputs, 1):
+                snapshot.save_section_raw(report_dir, f"{sec}.attempt-{i}.quality_failed", raw)
+            failed_any = True
+            continue
+
+        if result.v2_validation:
+            scale_warnings = [
+                w for w in result.v2_validation.warnings
+                if w.category == "numeric_scale_mismatch"
+            ]
+            if scale_warnings:
+                print(f"  FAILED numeric scale guard: {len(scale_warnings)} signal(s)")
+                for w in scale_warnings[:5]:
+                    print(f"    L{w.line}: {w.message}")
+                for i, raw in enumerate(result.raw_outputs, 1):
+                    snapshot.save_section_raw(report_dir, f"{sec}.attempt-{i}.numeric_failed", raw)
+                failed_any = True
+                continue
+
         print(f"  PASSED in {result.attempts} attempt(s)")
         for i, raw in enumerate(result.raw_outputs, 1):
             snapshot.save_section_raw(report_dir, f"{sec}.attempt-{i}", raw)
@@ -182,6 +224,10 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         print(f"\n일부 섹션 실패 — 합본 skip")
         return 2
 
+    if args.section != "all" and not args.assemble:
+        print(f"\n단일 섹션 생성 완료 — stale 합본 방지를 위해 00_종합진단.md 재조립은 skip")
+        return 0
+
     print(f"\n=== 합본 작성 ===")
     target = assemble_report(
         report_dir=report_dir,
@@ -191,6 +237,71 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         frame=frame,
         write_owner_summary=not args.skip_owner_summary,
     )
+    assembled_guard = report_quality.validate_generated_text(
+        target.read_text(encoding="utf-8")
+    )
+    if not assembled_guard.passed:
+        print(f"ERROR: 합본 품질 가드 실패")
+        print(assembled_guard.render())
+        return 2
+    print(f"saved: {target}")
+    return 0
+
+
+def _cmd_assemble(args: argparse.Namespace) -> int:
+    watchlist = parse_watchlist(config.WATCHLIST_PATH.read_text(encoding="utf-8"))
+    entry = find_by_ticker(watchlist, args.ticker)
+    if not entry:
+        print(f"ERROR: ticker {args.ticker} _watchlist.md에 없음")
+        return 1
+
+    company = entry.name
+    report_dir = config.COMPANIES_DIR / company / args.period
+    missing = [
+        sec for sec in SECTION_SPECS
+        if not (report_dir / f"{sec}.md").exists()
+    ]
+    if missing:
+        print("ERROR: 합본에 필요한 섹션이 없습니다:")
+        for sec in missing:
+            print(f"  - {sec}")
+        return 1
+
+    failed_sections: list[str] = []
+    for sec in SECTION_SPECS:
+        text = (report_dir / f"{sec}.md").read_text(encoding="utf-8")
+        guard = report_quality.validate_generated_text(text)
+        if not guard.passed:
+            failed_sections.append(sec)
+            print(f"ERROR: {sec} 품질 가드 실패")
+            print(guard.render())
+    if failed_sections:
+        return 2
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    timestamps = DataTimestamps(
+        written_at=today,
+        dart_query_at=args.dart_query_at or f"DART API ({today})",
+        financial_basis=args.financial_basis or f"{args.period} 보고서",
+        market_price=args.market_price,
+        foreign_holding=args.foreign_holding,
+        macro_data=args.macro_data,
+    )
+    target = assemble_report(
+        report_dir=report_dir,
+        company=company,
+        period=args.period,
+        timestamps=timestamps,
+        frame=load_frame(),
+        write_owner_summary=not args.skip_owner_summary,
+    )
+    assembled_guard = report_quality.validate_generated_text(
+        target.read_text(encoding="utf-8")
+    )
+    if not assembled_guard.passed:
+        print(f"ERROR: 합본 품질 가드 실패")
+        print(assembled_guard.render())
+        return 2
     print(f"saved: {target}")
     return 0
 
@@ -213,14 +324,29 @@ def main() -> int:
     p_gen.add_argument("--period", required=True, help="폴더명 (예: 2025-annual)")
     p_gen.add_argument("--section", default="all")
     p_gen.add_argument("--max-chars", type=int, default=300_000)
+    p_gen.add_argument("--max-total-chars", type=int, default=180_000, help="전체 DART 원문 텍스트 예산")
     p_gen.add_argument("--skip-fetch", action="store_true", help="이미 받은 데이터 재사용")
     p_gen.add_argument("--skip-owner-summary", action="store_true", help="합본의 owner-valuation 한 페이지 LLM 호출 skip")
+    p_gen.add_argument("--allow-missing-xbrl", action="store_true", help="XBRL 없어도 생성 허용 (기본은 정기보고서에서 hard fail)")
+    p_gen.add_argument("--assemble", action="store_true", help="단일 섹션 실행 후에도 합본 재조립")
+
+    p_assemble = sub.add_parser("assemble", help="이미 생성된 섹션들로 00_종합진단.md 합본 작성")
+    p_assemble.add_argument("--ticker", required=True, help="KRX 6자리 (예: 005930)")
+    p_assemble.add_argument("--period", required=True, help="폴더명 (예: 2025-annual)")
+    p_assemble.add_argument("--financial-basis", default=None)
+    p_assemble.add_argument("--dart-query-at", default=None)
+    p_assemble.add_argument("--market-price", default="(별도 시장 데이터 미포함 — 자동 모드 v0.1)")
+    p_assemble.add_argument("--foreign-holding", default="(별도 외인 데이터 미포함)")
+    p_assemble.add_argument("--macro-data", default="(별도 매크로 데이터 미포함)")
+    p_assemble.add_argument("--skip-owner-summary", action="store_true")
 
     args = parser.parse_args()
     if args.cmd == "map-corps":
         return _cmd_map_corps(args)
     if args.cmd == "generate":
         return _cmd_generate(args)
+    if args.cmd == "assemble":
+        return _cmd_assemble(args)
     parser.print_help()
     return 1
 

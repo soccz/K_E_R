@@ -30,12 +30,27 @@ if [ -z "${DART_API_KEY:-}" ]; then
   exit 1
 fi
 
-# 기본 타깃: 삼성전자 직전 사업보고서
-# TODO: 자동 선정 로직 (orchestrator)
-TICKER="${WEEKDAY_TICKER:-005930}"
+# 기본: pick_next_ticker.py가 워치리스트 회전 (00_종합진단.md 없는 첫 종목)
+# 명시적 override: WEEKDAY_TICKER=005930 bin/run_weekly.sh
 BSNS_YEAR="${WEEKDAY_BSNS_YEAR:-2025}"
 REPRT_CODE="${WEEKDAY_REPRT_CODE:-11011}"
 PERIOD="${WEEKDAY_PERIOD:-2025-annual}"
+
+if [ -z "${WEEKDAY_TICKER:-}" ]; then
+  if TICKER=$("$PYTHON" -m pipeline.pick_next_ticker --period "$PERIOD"); then
+    :
+  else
+    PICK_RC=$?
+    if [ "$PICK_RC" -eq 2 ]; then
+      echo "[$LOG_TS] all-done: $PERIOD 24종목 모두 완료 — skip"
+      exit 0
+    fi
+    echo "ERROR: 다음 티커 선정 실패 (rc=$PICK_RC)"
+    exit "$PICK_RC"
+  fi
+else
+  TICKER="$WEEKDAY_TICKER"
+fi
 
 echo "ticker=$TICKER bsns_year=$BSNS_YEAR reprt_code=$REPRT_CODE period=$PERIOD"
 

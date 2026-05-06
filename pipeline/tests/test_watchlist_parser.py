@@ -49,4 +49,7 @@ def test_full_watchlist_loads():
     names = [e.name for e in entries]
     assert "삼성전자" in names
     assert "한화에어로스페이스" in names
-    assert all(e.corp_code is None for e in entries)
+    assert all(
+        e.corp_code and e.corp_code.isdigit() and len(e.corp_code) == 8
+        for e in entries
+    )

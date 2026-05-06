@@ -23,7 +23,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from pipeline import config, snapshot
+from pipeline import config, report_quality, snapshot
 from pipeline.frame_loader import load_frame
 from pipeline.local_data_loader import load_local_dart_data
 from pipeline.prompt_builder import (
@@ -69,6 +69,9 @@ def _run_one_section(
         timestamps=timestamps,
         dart_data=dart_data,
         market_data=market_data,
+        source_pack_summary=(
+            source_pack.to_prompt_summary() if source_pack is not None else None
+        ),
     )
     print(f"  system prompt: {len(sys_prompt):,} chars")
     print(f"  user prompt:   {len(user_prompt):,} chars")
@@ -89,6 +92,12 @@ def _run_one_section(
         print(f"  FAILED after retries.")
         print(f"  V1 (style/source):\n{e.v1.render()}")
         print(f"  V3 (arithmetic):\n{e.v3.render()}")
+        return False
+
+    text_guard = report_quality.validate_generated_text(result.final_text)
+    if not text_guard.passed:
+        print(f"  FAILED quality guard")
+        print(text_guard.render())
         return False
 
     print(f"  PASSED in {result.attempts} attempt(s)")
@@ -122,12 +131,6 @@ def _run_one_section(
 
     return True
 
-    for i, raw in enumerate(result.raw_outputs, 1):
-        snapshot.save_section_raw(report_dir, f"{section_id}.attempt-{i}", raw)
-    snapshot.save_section_final(report_dir, section_id, result.final_text)
-    print(f"  saved: {report_dir / f'{section_id}.md'}")
-    return True
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -144,7 +147,13 @@ def main() -> int:
         "--max-chars",
         type=int,
         default=400_000,
-        help="user prompt에 포함할 DART 텍스트 최대 길이 (기본 400K)",
+        help="파일별 DART 텍스트 최대 길이 (기본 400K)",
+    )
+    parser.add_argument(
+        "--max-total-chars",
+        type=int,
+        default=180_000,
+        help="전체 DART 원문 텍스트 예산",
     )
     parser.add_argument(
         "--financial-basis",
@@ -186,11 +195,16 @@ def main() -> int:
         )
         return 1
 
-    dart_data = load_local_dart_data(raw_inputs_dir, max_chars=args.max_chars)
+    dart_data = load_local_dart_data(
+        raw_inputs_dir,
+        max_chars=args.max_chars,
+        max_total_chars=args.max_total_chars,
+    )
     print(f"\nDART 데이터 ({len(dart_data['filings'])} 파일):")
     for f in dart_data["filings"]:
         flag = " [TRUNCATED]" if f["truncated"] else ""
-        print(f"  - {f['name']}: {f['text_chars']:,} chars{flag}")
+        loaded = f.get("loaded_chars", len(f.get("text", "")))
+        print(f"  - {f['name']}: {loaded:,}/{f['text_chars']:,} chars{flag}")
 
     market_data = {"note": "manual mode — 시장 데이터는 다음 실행에서 추가"}
     fb = args.financial_basis or f"{args.period} 보고서 (수동 다운로드)"
@@ -206,6 +220,19 @@ def main() -> int:
         print(f"  Korean labels: {len(source_pack.xbrl.label_map):,}")
     else:
         print(f"\nXBRL 없음 → V2 validator skip")
+
+    input_guard = report_quality.validate_generation_inputs(
+        dart_data,
+        source_pack,
+        require_xbrl=False,
+    )
+    if not input_guard.passed:
+        print(f"\nERROR: 입력 품질 가드 실패")
+        print(input_guard.render())
+        return 1
+    if input_guard.warnings:
+        print(f"\n입력 품질 가드 경고")
+        print(input_guard.render())
 
     sections = (
         list(SECTION_SPECS.keys()) if args.section == "all" else [args.section]
@@ -247,6 +274,13 @@ def main() -> int:
             frame=frame,
             write_owner_summary=not args.no_owner_summary,
         )
+        assembled_guard = report_quality.validate_generated_text(
+            target.read_text(encoding="utf-8")
+        )
+        if not assembled_guard.passed:
+            print(f"합본 품질 가드 실패")
+            print(assembled_guard.render())
+            return 3
         print(f"합본 완료: {target}")
 
     return 0
