@@ -98,15 +98,31 @@ if not report.should_publish():
     print('[daily] 트리거 변동 — 0건 (재검사). 메모 건너뛰기.')
     raise SystemExit(0)
 
-note = build_daily_note(report, watchlist, top_n=3)  # llm_call=None → llm_client.generate_section
+note = build_daily_note(report, watchlist, top_n=3)
 if note is None:
     print('[daily] 메모 빌드 실패')
     raise SystemExit(2)
+
+# LLM 실패 가드 — observation이 비었거나 '(LLM 호출 실패' 시 push 차단.
+if not note.is_valid:
+    print(f'[daily] LLM 호출 실패 또는 observation 비어있음 — push 차단')
+    print(f'  observation 첫 200자: {note.observation[:200]}')
+    raise SystemExit(3)
 
 out = Path('$NOTE_PATH')
 note.save(out)
 print(f'[daily] saved: {out} ({len(note.to_markdown())} chars, {len(note.ticker_cards)} cards)')
 EOF
+
+PYTHON_RC=$?
+if [ $PYTHON_RC -eq 3 ]; then
+  echo "[daily] LLM 가드 트리거 — 사이트 push 없이 종료"
+  exit 0
+fi
+if [ $PYTHON_RC -ne 0 ]; then
+  echo "[daily] 메모 빌드 실패 (rc=$PYTHON_RC)"
+  exit $PYTHON_RC
+fi
 
 if [ ! -f "$NOTE_PATH" ]; then
   echo "[daily] 메모 파일 없음 — push 차단"

@@ -1007,8 +1007,26 @@ tr.stock-row.stock-active td.action {
 """
 
 
-def _wrap_html(title: str, body: str, breadcrumb: str = "", description: str = "") -> str:
+SITE_BASE_URL = "https://soccz.github.io/projects/k-e-r"
+SITE_OG_IMAGE = "https://soccz.github.io/assets/og-image.svg"
+
+
+def _wrap_html(
+    title: str,
+    body: str,
+    breadcrumb: str = "",
+    description: str = "",
+    canonical_path: str = "",
+    og_type: str = "website",
+    published_time: str | None = None,
+) -> str:
     desc = description or "DART 기반 한국 상장사 종합 진단. 출처 검증 + 추론 명시 + XBRL ground truth."
+    canonical_url = f"{SITE_BASE_URL}/{canonical_path.lstrip('/')}" if canonical_path else SITE_BASE_URL
+    pub_meta = (
+        f'<meta property="article:published_time" content="{escape(published_time)}">'
+        if og_type == "article" and published_time
+        else ""
+    )
     return f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -1019,11 +1037,17 @@ def _wrap_html(title: str, body: str, breadcrumb: str = "", description: str = "
   <title>{escape(title)}</title>
   <meta property="og:title" content="{escape(title)}">
   <meta property="og:description" content="{escape(desc)}">
-  <meta property="og:type" content="article">
+  <meta property="og:type" content="{escape(og_type)}">
   <meta property="og:site_name" content="K_E_R — Korea Equity Reports">
-  <meta property="og:image" content="https://soccz.github.io/assets/og-image.svg">
+  <meta property="og:url" content="{escape(canonical_url)}">
+  <meta property="og:image" content="{SITE_OG_IMAGE}">
+  <meta property="og:locale" content="ko_KR">
+  {pub_meta}
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="canonical" href="">
+  <meta name="twitter:title" content="{escape(title)}">
+  <meta name="twitter:description" content="{escape(desc)}">
+  <meta name="twitter:image" content="{SITE_OG_IMAGE}">
+  <link rel="canonical" href="{escape(canonical_url)}">
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1608,8 +1632,15 @@ def render_master_index(
 </script>"""
 
     title = "K_E_R — Korea Equity Reports"
+    description = (
+        "DART 기반 한국 상장사 자동 진단. 워치리스트 24종목 + 일간 관찰. "
+        "페르소나 owner mindset + 4단 검증 (V1·V2·V3·V4) + cross-section consistency."
+    )
     out_html_path.parent.mkdir(parents=True, exist_ok=True)
-    out_html_path.write_text(_wrap_html(title, body), encoding="utf-8")
+    out_html_path.write_text(
+        _wrap_html(title, body, description=description, canonical_path="", og_type="website"),
+        encoding="utf-8",
+    )
 
 
 def discover_reports(companies_dir: Path) -> dict[str, list[ReportEntry]]:
@@ -1754,7 +1785,15 @@ def render_daily_note_to_html(
         f"K_E_R {fetch_date} 일간 관찰 노트 — 페르소나 + 학술 톤. "
         f"매수·매도 권고가 아닌 공개 관찰 기록."
     )
-    full_html = _wrap_html(title, body_html, breadcrumb=breadcrumb, description=description)
+    full_html = _wrap_html(
+        title,
+        body_html,
+        breadcrumb=breadcrumb,
+        description=description,
+        canonical_path=f"daily/{fetch_date}.html",
+        og_type="article",
+        published_time=f"{fetch_date}T16:00:00+09:00",
+    )
     out_html_path.parent.mkdir(parents=True, exist_ok=True)
     out_html_path.write_text(full_html, encoding="utf-8")
 
@@ -1864,7 +1903,14 @@ def render_daily_index(
         "K_E_R 일간 관찰 노트 시계열. DART 공시·KRX 가격·외인 수급·디커플링 "
         "4종 임계치 통과 시 자동 발행. 매수·매도 권고 아님."
     )
-    full = _wrap_html("Daily Notes — K_E_R", body, breadcrumb=breadcrumb, description=description)
+    full = _wrap_html(
+        "Daily Notes — K_E_R",
+        body,
+        breadcrumb=breadcrumb,
+        description=description,
+        canonical_path="daily/",
+        og_type="website",
+    )
     daily_html_dir.mkdir(parents=True, exist_ok=True)
     (daily_html_dir / "index.html").write_text(full, encoding="utf-8")
 

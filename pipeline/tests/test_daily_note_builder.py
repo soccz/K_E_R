@@ -253,7 +253,7 @@ def test_build_daily_note_with_mocked_llm(monkeypatch):
 
 
 def test_build_daily_note_handles_llm_failure(monkeypatch):
-    """LLM 호출 실패해도 카드·매크로는 살아남아 마크다운 생성."""
+    """LLM 호출 실패해도 카드·매크로는 살아남아 마크다운 생성. is_valid=False."""
     monkeypatch.setattr(dnb, "_fetch_60d_sparkline",
                         lambda t: dnb.build_sparkline([100, 110], ["a", "b"]))
     monkeypatch.setattr(dnb, "_fetch_volume_zscore", lambda t: (1.5, 1000))
@@ -271,5 +271,30 @@ def test_build_daily_note_handles_llm_failure(monkeypatch):
     )
     assert note is not None
     assert "LLM 호출 실패" in note.observation
-    # 카드는 살아있음
     assert len(note.ticker_cards) == 1
+    # 가드 — push 차단 신호
+    assert note.is_valid is False
+
+
+def test_daily_note_is_valid_when_observation_present():
+    note = dnb.DailyNote(
+        fetch_date="2026-05-09",
+        headline="t", macro_indicators=[],
+        observation="외인 자금 재배분이 관찰된다.",
+        ticker_cards=[], sector_tone={}, triggers_summary="t",
+    )
+    assert note.is_valid
+
+
+def test_daily_note_save_writes_raw_text(tmp_path):
+    note = dnb.DailyNote(
+        fetch_date="2026-05-09",
+        headline="t", macro_indicators=[],
+        observation="o", ticker_cards=[], sector_tone={}, triggers_summary="t",
+        raw_llm_text='{"headline": "t", "observation": "o"}',
+    )
+    target = tmp_path / "daily_notes" / "2026-05-09.md"
+    note.save(target)
+    raw_path = tmp_path / "daily_notes" / "_raw" / "2026-05-09.txt"
+    assert raw_path.exists()
+    assert raw_path.read_text(encoding="utf-8") == note.raw_llm_text

@@ -174,8 +174,27 @@ class DailyNote:
         return "\n".join(out)
 
     def save(self, path: Path) -> None:
+        """마크다운 저장 + raw LLM 텍스트는 _raw/<date>.txt로 별도 저장.
+
+        raw 저장 목적: 톤 캘리브레이션 시 'LLM이 왜 그렇게 나왔나' 추적.
+        """
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(self.to_markdown(), encoding="utf-8")
+        if self.raw_llm_text:
+            raw_dir = path.parent / "_raw"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            (raw_dir / f"{self.fetch_date}.txt").write_text(
+                self.raw_llm_text, encoding="utf-8"
+            )
+
+    @property
+    def is_valid(self) -> bool:
+        """LLM 호출 실패한 메모는 사이트 push 차단용."""
+        if not self.observation:
+            return False
+        if self.observation.startswith("(LLM 호출 실패"):
+            return False
+        return True
 
 
 # ────────────────────────────────────────────────────────────────────
