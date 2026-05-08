@@ -994,23 +994,27 @@ tr.stock-row.stock-active:hover .mcap-fill { background: var(--accent); }
   padding: 0 32px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 36px;
+  grid-template-areas:
+    "header header"
+    "archive method";
+  gap: 28px 36px;
   align-items: start;
 }
+.dn-header  { grid-area: header; }
+.dn-archive { grid-area: archive; min-width: 0; }
+.dn-method  { grid-area: method; position: sticky; top: 80px; }
+
 .dn-header {
-  grid-column: 1 / -1;
   border-bottom: 2px solid var(--rule);
-  padding-bottom: 20px; margin-bottom: 8px;
+  padding-bottom: 20px;
 }
-.dn-archive { grid-column: 1; min-width: 0; }
-.dn-method  { grid-column: 2; margin-top: 0; position: sticky; top: 80px; }
 
 @media (max-width: 900px) {
   .dn-page {
     grid-template-columns: 1fr;
+    grid-template-areas: "header" "method" "archive";
     gap: 24px;
   }
-  .dn-archive, .dn-method { grid-column: 1; }
   .dn-method { position: static; }
 }
 .dn-header-meta {
