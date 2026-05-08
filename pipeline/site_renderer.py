@@ -38,12 +38,18 @@ class ReportEntry:
 # ---------------- shared CSS (matches soccz.github.io palette) ----------------
 
 
-from pipeline.site_styles import SHARED_CSS as _SHARED_CSS
+import hashlib
 
+from pipeline.site_styles import SHARED_CSS as _SHARED_CSS
 
 
 SITE_BASE_URL = "https://soccz.github.io/projects/k-e-r"
 SITE_OG_IMAGE = "https://soccz.github.io/assets/og-image.svg"
+
+# CSS 외부화 — 페이지마다 35KB 인라인 중복 → 1회 캐시.
+# query string에 content-hash로 cache busting (CSS 변경 시 자동 무효화).
+_CSS_HASH = hashlib.md5(_SHARED_CSS.encode("utf-8")).hexdigest()[:8]
+_CSS_HREF = f"/projects/k-e-r/assets/k-e-r.css?v={_CSS_HASH}"
 
 
 def _wrap_html(
@@ -86,8 +92,8 @@ def _wrap_html(
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-  <style>{_SHARED_CSS}</style>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{_CSS_HREF}">
   <script>
     // 테마 — localStorage > prefers-color-scheme 순. inline으로 첫 페인트 전 적용 (FOUC 방지).
     (function(){{
@@ -913,7 +919,56 @@ def render_all(
     # 마스터 인덱스는 항상 다시 (워치리스트 placeholder + 일간 메모 카드 포함)
     master = site_root / "index.html"
     render_master_index(master, discovered, watchlist=watchlist, daily_count=daily_count)
+
+    # 외부 CSS + sitemap + robots
+    _write_static_assets(site_root)
+
     return len(discovered), total_reports, rendered
+
+
+def _write_static_assets(site_root: Path) -> None:
+    """외부 CSS, sitemap.xml, robots.txt 작성.
+
+    CSS는 query string content-hash로 cache busting (변경 시 즉시 무효화).
+    sitemap.xml은 site_root 안의 모든 .html을 lastmod와 함께 등록.
+    robots.txt는 도메인 루트(soccz.github.io/)에만 의미가 있으므로,
+    site_root의 부모(soccz.github.io)에 없을 때만 생성.
+    """
+    # 1) CSS
+    assets_dir = site_root / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    (assets_dir / "k-e-r.css").write_text(_SHARED_CSS, encoding="utf-8")
+
+    # 2) sitemap.xml
+    urls: list[tuple[str, str]] = []
+    for html in sorted(site_root.rglob("*.html")):
+        rel = html.relative_to(site_root).as_posix()
+        if rel.endswith("index.html"):
+            url_path = rel[: -len("index.html")]
+        else:
+            url_path = rel
+        loc = f"{SITE_BASE_URL}/{url_path}".rstrip("/") + ("/" if url_path.endswith("/") or url_path == "" else "")
+        if not url_path:
+            loc = SITE_BASE_URL + "/"
+        lastmod = datetime.fromtimestamp(html.stat().st_mtime).strftime("%Y-%m-%d")
+        urls.append((loc, lastmod))
+
+    sitemap_xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    sitemap_xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for loc, lastmod in urls:
+        sitemap_xml += f"  <url><loc>{escape(loc)}</loc><lastmod>{lastmod}</lastmod></url>\n"
+    sitemap_xml += "</urlset>\n"
+    (site_root / "sitemap.xml").write_text(sitemap_xml, encoding="utf-8")
+
+    # 3) robots.txt — 도메인 루트에만 (soccz.github.io 루트 = site_root.parent.parent)
+    domain_root = site_root.parent.parent
+    robots_path = domain_root / "robots.txt"
+    if domain_root.is_dir() and not robots_path.exists():
+        robots_path.write_text(
+            "User-agent: *\nAllow: /\n\n"
+            f"Sitemap: {SITE_BASE_URL}/sitemap.xml\n",
+            encoding="utf-8",
+        )
 
 
 # ════════════════════════════════════════════════════════════════════
