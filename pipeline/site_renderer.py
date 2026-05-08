@@ -753,6 +753,42 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
 }
 .filter-pill.active .pill-count { opacity: 0.85; }
 
+/* Daily 메모 (Phase D) */
+.daily-link-banner {
+  margin-top: 18px; padding: 10px 14px;
+  background: var(--surface); border-left: 3px solid var(--accent);
+  font-size: 14px;
+}
+.daily-link-banner a {
+  color: var(--text); text-decoration: none; font-weight: 500;
+}
+.daily-link-banner a:hover { color: var(--accent); }
+.daily-index { max-width: 760px; margin: 30px auto; padding: 0 20px; }
+.daily-header h1 { font-size: 28px; margin: 10px 0 8px; }
+.daily-intro {
+  color: var(--text-dim); font-size: 14px; line-height: 1.6;
+  margin-bottom: 30px;
+}
+.daily-list { list-style: none; padding: 0; }
+.daily-item {
+  border-bottom: 1px solid var(--rule); padding: 14px 0;
+}
+.daily-item a {
+  display: flex; gap: 18px; align-items: baseline;
+  text-decoration: none; color: inherit;
+}
+.daily-item a:hover .daily-headline { color: var(--accent); }
+.daily-date {
+  font-family: var(--mono); font-size: 13px; color: var(--text-dim);
+  flex-shrink: 0;
+}
+.daily-headline {
+  flex: 1; font-size: 15px; line-height: 1.5;
+}
+.daily-empty {
+  color: var(--text-dim); font-style: italic; padding: 30px 0;
+}
+
 /* Watchlist 표 */
 .watchlist-table {
   background: var(--surface);
@@ -1338,10 +1374,12 @@ def render_master_index(
     out_html_path: Path,
     companies: dict[str, list[ReportEntry]],
     watchlist: list[WatchlistEntry] | None = None,
+    daily_count: int = 0,
 ) -> None:
     """마스터 인덱스 — dashboard 표 레이아웃, 섹터 필터 포함.
 
     24종목 전부 한 페이지에 압축 표시. 카드 그리드보다 훨씬 짧음.
+    daily_count > 0이면 상단에 "일간 메모" 카드 노출.
     """
     if watchlist is None:
         watchlist = []
@@ -1430,6 +1468,7 @@ def render_master_index(
     <div class="stat"><span class="stat-num">{n_total_reports}</span><span class="stat-lbl">누적 보고서</span></div>
     <div class="stat"><span class="stat-num">{len(sector_groups)}</span><span class="stat-lbl">섹터</span></div>
   </div>
+  {f'<div class="daily-link-banner"><a href="daily/">📓 일간 메모 ({daily_count}편) — 학술 톤 공개 관찰 기록 →</a></div>' if daily_count > 0 else ''}
 </div>
 
 <div class="filter-bar">
@@ -1539,11 +1578,13 @@ def render_all(
     site_root: Path,
     watchlist_path: Path | None = None,
     incremental: bool = True,
+    daily_notes_dir: Path | None = None,
 ) -> tuple[int, int, int]:
     """전체 변환 — companies → site_root/projects/k-e-r/.
 
     incremental=True: MD가 HTML보다 새로운 것만 다시 렌더 (대량 보고서 시 빠름).
     워치리스트 path 주면 마스터 인덱스에 24종목 전부 표시 (placeholder 포함).
+    daily_notes_dir 주면 site_root/daily/에 일간 메모도 함께 렌더.
     반환: (회사 수, 발견된 보고서 수, 실제 렌더된 수)
     """
     discovered = discover_reports(companies_dir)
@@ -1574,7 +1615,123 @@ def render_all(
     if watchlist_path and watchlist_path.exists():
         watchlist = parse_watchlist(watchlist_path.read_text(encoding="utf-8"))
 
-    # 마스터 인덱스는 항상 다시 (워치리스트 placeholder 포함)
+    # 일간 메모 렌더 (옵션)
+    daily_count = 0
+    if daily_notes_dir is not None and daily_notes_dir.exists():
+        daily_count = render_all_daily_notes(daily_notes_dir, site_root, incremental=incremental)
+
+    # 마스터 인덱스는 항상 다시 (워치리스트 placeholder + 일간 메모 카드 포함)
     master = site_root / "index.html"
-    render_master_index(master, discovered, watchlist=watchlist)
+    render_master_index(master, discovered, watchlist=watchlist, daily_count=daily_count)
     return len(discovered), total_reports, rendered
+
+
+# ════════════════════════════════════════════════════════════════════
+# 일간 메모 렌더링 (Phase D)
+# ════════════════════════════════════════════════════════════════════
+
+
+def render_daily_note_to_html(
+    md_path: Path,
+    out_html_path: Path,
+    fetch_date: str,
+) -> None:
+    """단일 일간 메모 MD → HTML.
+
+    마크다운 안의 인라인 SVG는 그대로 통과 (markdown 라이브러리가 raw HTML 보존).
+    """
+    md_text = md_path.read_text(encoding="utf-8")
+    body_html = _md_to_html(md_text)
+    title = f"{fetch_date} 일간 메모 — K_E_R"
+    breadcrumb = (
+        f'<a href="../">K_E_R</a> · '
+        f'<a href="./">일간 메모</a> · '
+        f'<span>{fetch_date}</span>'
+    )
+    description = (
+        f"K_E_R {fetch_date} 일간 관찰 노트 — 페르소나 + 학술 톤. "
+        f"매수·매도 권고가 아닌 공개 관찰 기록."
+    )
+    full_html = _wrap_html(title, body_html, breadcrumb=breadcrumb, description=description)
+    out_html_path.parent.mkdir(parents=True, exist_ok=True)
+    out_html_path.write_text(full_html, encoding="utf-8")
+
+
+def render_daily_index(
+    daily_html_dir: Path,
+    notes_md: list[Path],
+) -> None:
+    """일간 메모 시계열 인덱스 (최신순)."""
+    notes_sorted = sorted(notes_md, key=lambda p: p.stem, reverse=True)
+    items_html: list[str] = []
+    for md in notes_sorted:
+        date = md.stem  # YYYY-MM-DD
+        # 메모 본문에서 헤드라인 1줄 추출
+        text = md.read_text(encoding="utf-8")
+        first_line = next(
+            (
+                ln.lstrip("# ").strip()
+                for ln in text.splitlines()
+                if ln.startswith("# ")
+            ),
+            date,
+        )
+        # "# 2026-05-09 일간 메모    ★★★ 헤드라인" → 헤드라인만 추출
+        if "일간 메모" in first_line:
+            parts = first_line.split("일간 메모", 1)
+            headline = parts[1].strip() if len(parts) > 1 else ""
+        else:
+            headline = first_line
+        items_html.append(
+            f'<li class="daily-item">'
+            f'<a href="{date}.html">'
+            f'<span class="daily-date">{date}</span>'
+            f'<span class="daily-headline">{headline}</span>'
+            f'</a></li>'
+        )
+
+    list_html = (
+        "".join(items_html)
+        if items_html
+        else '<li class="daily-empty">아직 발행된 메모 없음.</li>'
+    )
+    body = (
+        '<div class="daily-index">'
+        '<header class="daily-header">'
+        '<h1>일간 메모 (Daily Notes)</h1>'
+        '<p class="daily-intro">'
+        'K_E_R 외부 노출 트랙. 임계치(가격·외인·DART 공시·디커플링) 통과 시 발행. '
+        '학술/연구 톤의 공개 관찰 기록 — 매수·매도 권고가 아님 (페르소나 §5 + spec §1.2).'
+        '</p>'
+        '</header>'
+        f'<ul class="daily-list">{list_html}</ul>'
+        '</div>'
+    )
+    breadcrumb = '<a href="../">K_E_R</a> · <span>일간 메모</span>'
+    description = "K_E_R 일간 관찰 메모 시계열 — 학술/연구 톤. 매수·매도 권고가 아닌 공개 관찰."
+    full = _wrap_html("일간 메모 — K_E_R", body, breadcrumb=breadcrumb, description=description)
+    daily_html_dir.mkdir(parents=True, exist_ok=True)
+    (daily_html_dir / "index.html").write_text(full, encoding="utf-8")
+
+
+def render_all_daily_notes(
+    daily_notes_dir: Path,
+    site_root: Path,
+    incremental: bool = True,
+) -> int:
+    """daily_notes/*.md → site_root/daily/*.html. 반환: 총 발행된 메모 수."""
+    daily_html_dir = site_root / "daily"
+    daily_html_dir.mkdir(parents=True, exist_ok=True)
+
+    notes_md = sorted(daily_notes_dir.glob("*.md"))
+    notes_md = [p for p in notes_md if p.stem != "_index"]  # _index는 제외
+
+    for md in notes_md:
+        date = md.stem
+        html_path = daily_html_dir / f"{date}.html"
+        if incremental and not _file_needs_rerender(md, html_path):
+            continue
+        render_daily_note_to_html(md, html_path, fetch_date=date)
+
+    render_daily_index(daily_html_dir, notes_md)
+    return len(notes_md)

@@ -22,18 +22,21 @@ if [ ! -x .venv/bin/python ]; then
   exit 0
 fi
 
-echo "[publish] companies/ → HTML 렌더 → $SITE_KER_DIR"
+echo "[publish] companies/ + daily_notes/ → HTML 렌더 → $SITE_KER_DIR"
 if ! .venv/bin/python -c "
 from pathlib import Path
 from pipeline.site_renderer import render_all
+daily_dir = Path('daily_notes')
 n_companies, n_reports, n_rendered = render_all(
     Path('companies'),
     Path('$SITE_KER_DIR'),
     watchlist_path=Path('_watchlist.md'),
     incremental=True,
+    daily_notes_dir=daily_dir if daily_dir.exists() else None,
 )
 print(f'  발견: {n_companies} companies, {n_reports} reports')
 print(f'  렌더: {n_rendered} (incremental — 변경된 것만)')
+print(f'  일간 메모 디렉토리: {\"있음\" if daily_dir.exists() else \"없음 (Phase E 후 활성)\"}')
 print(f'  마스터 인덱스: 워치리스트 24종목 + placeholder')
 " 2>&1; then
   echo "[publish] 렌더 실패 — push 차단"
