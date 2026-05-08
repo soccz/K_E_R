@@ -1149,6 +1149,14 @@ def render_all_daily_notes(
     notes_md = sorted(daily_notes_dir.glob("*.md"))
     notes_md = [p for p in notes_md if p.stem != "_index"]  # _index는 제외
 
+    # MD가 사라진 stale HTML 청소 (stub 삭제·이름 변경 시 잔재 방지).
+    valid_dates = {md.stem for md in notes_md}
+    for stale_html in daily_html_dir.glob("*.html"):
+        if stale_html.name == "index.html":
+            continue
+        if stale_html.stem not in valid_dates:
+            stale_html.unlink()
+
     for md in notes_md:
         date = md.stem
         html_path = daily_html_dir / f"{date}.html"
