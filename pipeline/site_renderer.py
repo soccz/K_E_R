@@ -755,38 +755,140 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
 
 /* Daily 메모 (Phase D) */
 .daily-link-banner {
-  margin-top: 18px; padding: 10px 14px;
-  background: var(--surface); border-left: 3px solid var(--accent);
-  font-size: 14px;
+  margin-top: 24px;
 }
 .daily-link-banner a {
-  color: var(--text); text-decoration: none; font-weight: 500;
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px;
+  background: var(--surface); border: 1px solid var(--rule);
+  text-decoration: none; color: var(--text);
+  transition: border-color 120ms;
 }
-.daily-link-banner a:hover { color: var(--accent); }
-.daily-index { max-width: 760px; margin: 30px auto; padding: 0 20px; }
-.daily-header h1 { font-size: 28px; margin: 10px 0 8px; }
-.daily-intro {
-  color: var(--text-dim); font-size: 14px; line-height: 1.6;
-  margin-bottom: 30px;
+.daily-link-banner a:hover { border-color: var(--accent); }
+.daily-banner-label {
+  font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-dim);
 }
-.daily-list { list-style: none; padding: 0; }
-.daily-item {
-  border-bottom: 1px solid var(--rule); padding: 14px 0;
+.daily-banner-count {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  padding: 2px 8px; background: var(--rule); border-radius: 2px;
 }
-.daily-item a {
-  display: flex; gap: 18px; align-items: baseline;
+.daily-banner-meta {
+  flex: 1; font-size: 13px; color: var(--text-dim);
+}
+.daily-banner-arrow {
+  font-family: var(--mono); color: var(--text-dim);
+}
+
+/* Daily 인덱스 페이지 — observation log 톤 */
+.dn-page {
+  max-width: 820px; margin: 24px auto 60px;
+  padding: 0 24px;
+}
+.dn-header {
+  border-bottom: 2px solid var(--rule);
+  padding-bottom: 20px; margin-bottom: 28px;
+}
+.dn-header-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text-dim); letter-spacing: 0.04em;
+  margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+}
+.dn-tag { text-transform: uppercase; }
+.dn-stat { font-feature-settings: "tnum"; }
+.dn-title {
+  font-size: 26px; font-weight: 600; margin: 4px 0 10px;
+  letter-spacing: -0.01em;
+}
+.dn-sub {
+  color: var(--text-dim); font-size: 14px; line-height: 1.65;
+  max-width: 640px;
+}
+
+.dn-method {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  padding: 18px 22px; margin: 24px 0 36px;
+}
+.dn-method h2 {
+  font-size: 12px; font-family: var(--mono);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-dim); margin: 0 0 10px;
+}
+.dn-method ul {
+  list-style: none; padding: 0; margin: 0;
+  font-size: 13.5px; line-height: 1.75;
+}
+.dn-method ul li { padding: 2px 0; }
+.dn-method ul li strong {
+  display: inline-block; min-width: 56px;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text-dim); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  margin-right: 8px;
+}
+.dn-method-meta {
+  margin: 14px 0 0; font-size: 12px;
+  color: var(--text-dim); font-family: var(--mono);
+}
+.dn-method-meta a {
+  color: var(--text-dim); text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+.dn-method-meta a:hover { color: var(--accent); border-color: var(--accent); }
+
+.dn-archive h2 {
+  font-size: 12px; font-family: var(--mono);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-dim); margin: 0 0 14px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+
+.dn-list { list-style: none; padding: 0; margin: 0; }
+.dn-item {
+  border-bottom: 1px solid var(--rule);
+}
+.dn-row {
+  display: flex; gap: 20px; align-items: flex-start;
+  padding: 16px 0;
   text-decoration: none; color: inherit;
 }
-.daily-item a:hover .daily-headline { color: var(--accent); }
-.daily-date {
-  font-family: var(--mono); font-size: 13px; color: var(--text-dim);
-  flex-shrink: 0;
+.dn-row:hover .dn-headline { color: var(--accent); }
+.dn-date {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--text-dim); flex-shrink: 0;
+  padding-top: 1px; min-width: 92px;
+  font-feature-settings: "tnum";
 }
-.daily-headline {
-  flex: 1; font-size: 15px; line-height: 1.5;
+.dn-body { flex: 1; min-width: 0; }
+.dn-headline {
+  display: block; font-size: 14.5px; line-height: 1.5;
+  font-weight: 500; transition: color 120ms;
 }
-.daily-empty {
-  color: var(--text-dim); font-style: italic; padding: 30px 0;
+.dn-meta {
+  display: block; margin-top: 4px;
+  font-family: var(--mono); font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.dn-empty-state {
+  border: 1px dashed var(--rule);
+  padding: 26px 22px; text-align: center;
+}
+.dn-empty-headline {
+  font-size: 14px; color: var(--text-dim);
+  margin: 0 0 6px;
+}
+.dn-empty-meta {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--text-dim); margin: 0;
+}
+.dn-empty-meta code {
+  background: var(--surface); padding: 1px 6px;
+  border: 1px solid var(--rule); border-radius: 2px;
+  font-size: 11.5px;
 }
 
 /* Watchlist 표 */
@@ -1468,7 +1570,7 @@ def render_master_index(
     <div class="stat"><span class="stat-num">{n_total_reports}</span><span class="stat-lbl">누적 보고서</span></div>
     <div class="stat"><span class="stat-num">{len(sector_groups)}</span><span class="stat-lbl">섹터</span></div>
   </div>
-  {f'<div class="daily-link-banner"><a href="daily/">📓 일간 메모 ({daily_count}편) — 학술 톤 공개 관찰 기록 →</a></div>' if daily_count > 0 else ''}
+  <div class="daily-link-banner"><a href="daily/"><span class="daily-banner-label">Observation log</span><span class="daily-banner-count">{daily_count}편</span><span class="daily-banner-meta">트리거 기반 일간 관찰 · 매일 16:00 KST 검사</span><span class="daily-banner-arrow">→</span></a></div>
 </div>
 
 <div class="filter-bar">
@@ -1661,12 +1763,13 @@ def render_daily_index(
     daily_html_dir: Path,
     notes_md: list[Path],
 ) -> None:
-    """일간 메모 시계열 인덱스 (최신순)."""
+    """일간 메모 시계열 인덱스 — 트리거 기반 관찰 일지 톤."""
+    from datetime import datetime, timedelta
+
     notes_sorted = sorted(notes_md, key=lambda p: p.stem, reverse=True)
     items_html: list[str] = []
     for md in notes_sorted:
-        date = md.stem  # YYYY-MM-DD
-        # 메모 본문에서 헤드라인 1줄 추출
+        date = md.stem
         text = md.read_text(encoding="utf-8")
         first_line = next(
             (
@@ -1676,40 +1779,92 @@ def render_daily_index(
             ),
             date,
         )
-        # "# 2026-05-09 일간 메모    ★★★ 헤드라인" → 헤드라인만 추출
         if "일간 메모" in first_line:
             parts = first_line.split("일간 메모", 1)
             headline = parts[1].strip() if len(parts) > 1 else ""
         else:
             headline = first_line
+        # 본문에서 트리거 메타 추출 ('> **트리거**: ...')
+        trigger_meta = ""
+        for ln in text.splitlines():
+            if ln.startswith("> **트리거**:"):
+                trigger_meta = ln.replace("> **트리거**:", "").strip()
+                break
+        # 종목 카드 N개 추출 ('### ' 카운트)
+        ticker_count = sum(1 for ln in text.splitlines() if ln.startswith("### "))
         items_html.append(
-            f'<li class="daily-item">'
-            f'<a href="{date}.html">'
-            f'<span class="daily-date">{date}</span>'
-            f'<span class="daily-headline">{headline}</span>'
+            f'<li class="dn-item">'
+            f'<a href="{date}.html" class="dn-row">'
+            f'<span class="dn-date">{date}</span>'
+            f'<span class="dn-body">'
+            f'<span class="dn-headline">{headline or "(no headline)"}</span>'
+            + (f'<span class="dn-meta">{trigger_meta} · 종목 {ticker_count}</span>' if trigger_meta or ticker_count else '')
+            + f'</span>'
             f'</a></li>'
         )
 
-    list_html = (
-        "".join(items_html)
-        if items_html
-        else '<li class="daily-empty">아직 발행된 메모 없음.</li>'
+    # 다음 자동 실행 시점 (매일 16:00 KST)
+    now = datetime.now()
+    next_run = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    if now >= next_run:
+        next_run += timedelta(days=1)
+    next_run_str = next_run.strftime("%Y-%m-%d %H:%M KST")
+
+    n_notes = len(notes_sorted)
+
+    if n_notes == 0:
+        body_inner = (
+            '<div class="dn-empty-state">'
+            '<p class="dn-empty-headline">아직 발행된 메모 없음.</p>'
+            '<p class="dn-empty-meta">'
+            f'다음 자동 검사 시점: <code>{next_run_str}</code>. '
+            '워치리스트 24종목 + KOSPI200 동향에서 임계치 통과 시 자동 발행.'
+            '</p>'
+            '</div>'
+        )
+    else:
+        body_inner = f'<ul class="dn-list">{"".join(items_html)}</ul>'
+
+    body = f'''<div class="dn-page">
+  <header class="dn-header">
+    <div class="dn-header-meta">
+      <span class="dn-tag">Observation log · trigger-based</span>
+      <span class="dn-stat">{n_notes}편 · 다음 검사 {next_run_str}</span>
+    </div>
+    <h1 class="dn-title">Daily Notes</h1>
+    <p class="dn-sub">
+      DART 공시 / KRX 가격 / 외인 수급 / 외인-국내 디커플링 — 4종 임계치 검사 후
+      통과 시 1면 관찰 메모. 매수·매도 권고 아님.
+    </p>
+  </header>
+
+  <section class="dn-method">
+    <h2>운영 원칙</h2>
+    <ul>
+      <li><strong>트리거</strong> — 가격 ±5% / 외인 ±500억 3일 / DART 주요 공시 / 디커플링 (4종 종합)</li>
+      <li><strong>출처</strong> — XBRL · DART OpenAPI · KRX OHLCV (1순위만)</li>
+      <li><strong>금지</strong> — 목표주가 · % 예측 · 양다리 결론</li>
+      <li><strong>구조</strong> — 매크로 · 관찰 · 종목 카드 1~3 · 섹터 톤</li>
+    </ul>
+    <p class="dn-method-meta">
+      <a href="https://github.com/soccz/K_E_R/blob/main/_persona.md">페르소나</a> ·
+      <a href="https://github.com/soccz/K_E_R/blob/main/_daily_note_spec.md">spec</a> ·
+      <a href="https://github.com/soccz/K_E_R">K_E_R repo</a>
+    </p>
+  </section>
+
+  <section class="dn-archive">
+    <h2>관찰 시계열</h2>
+    {body_inner}
+  </section>
+</div>'''
+
+    breadcrumb = '<a href="../">K_E_R</a> · <span>Daily Notes</span>'
+    description = (
+        "K_E_R 일간 관찰 노트 시계열. DART 공시·KRX 가격·외인 수급·디커플링 "
+        "4종 임계치 통과 시 자동 발행. 매수·매도 권고 아님."
     )
-    body = (
-        '<div class="daily-index">'
-        '<header class="daily-header">'
-        '<h1>일간 메모 (Daily Notes)</h1>'
-        '<p class="daily-intro">'
-        'K_E_R 외부 노출 트랙. 임계치(가격·외인·DART 공시·디커플링) 통과 시 발행. '
-        '학술/연구 톤의 공개 관찰 기록 — 매수·매도 권고가 아님 (페르소나 §5 + spec §1.2).'
-        '</p>'
-        '</header>'
-        f'<ul class="daily-list">{list_html}</ul>'
-        '</div>'
-    )
-    breadcrumb = '<a href="../">K_E_R</a> · <span>일간 메모</span>'
-    description = "K_E_R 일간 관찰 메모 시계열 — 학술/연구 톤. 매수·매도 권고가 아닌 공개 관찰."
-    full = _wrap_html("일간 메모 — K_E_R", body, breadcrumb=breadcrumb, description=description)
+    full = _wrap_html("Daily Notes — K_E_R", body, breadcrumb=breadcrumb, description=description)
     daily_html_dir.mkdir(parents=True, exist_ok=True)
     (daily_html_dir / "index.html").write_text(full, encoding="utf-8")
 
