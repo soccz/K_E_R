@@ -749,7 +749,7 @@ def render_master_index(
     <div class="stat"><span class="stat-num">{n_total_reports}</span><span class="stat-lbl">누적 보고서</span></div>
     <div class="stat"><span class="stat-num">{len(sector_groups)}</span><span class="stat-lbl">섹터</span></div>
   </div>
-  <div class="daily-link-banner"><a href="daily/"><span class="daily-banner-label">Observation log</span><span class="daily-banner-count">{daily_count}편</span><span class="daily-banner-meta">트리거 기반 일간 관찰 · 매일 16:00 KST 검사</span><span class="daily-banner-arrow">→</span></a></div>
+  <div class="daily-link-banner"><a href="daily/"><span class="daily-banner-label">Observation log</span><span class="daily-banner-count{' has-notes' if daily_count > 0 else ''}">{daily_count}편</span><span class="daily-banner-meta">트리거 기반 일간 관찰 · 평일 16:00 KST 검사</span><span class="daily-banner-arrow">→</span></a></div>
 </div>
 
 <div class="filter-bar">

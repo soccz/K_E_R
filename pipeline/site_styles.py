@@ -958,12 +958,27 @@ tr.stock-row.stock-active:hover .mcap-fill { background: var(--accent); }
 .daily-banner-count {
   font-family: var(--mono); font-size: 13px; font-weight: 700;
   padding: 3px 10px;
-  background: var(--accent); color: #fff;
   border-radius: 3px;
   letter-spacing: 0.02em;
+  /* 라이트 모드: 흰 배경 + 강조 색 글자 + 강조 색 테두리 (outline 스타일)
+     다크 모드: 강조 색 배경 + 어두운 글자 (filled 스타일)
+     0편이어도 명료히 보임 */
+  background: var(--surface);
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+}
+.daily-banner-count.has-notes {
+  background: var(--accent);
+  color: var(--surface);
 }
 :root[data-theme="dark"] .daily-banner-count {
-  color: #0d1117;
+  background: var(--surface);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+:root[data-theme="dark"] .daily-banner-count.has-notes {
+  background: var(--accent);
+  color: var(--bg);
 }
 .daily-banner-meta {
   flex: 1; font-size: 13px; color: var(--text-muted);
