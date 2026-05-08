@@ -22,6 +22,13 @@ if [ ! -x .venv/bin/python ]; then
   exit 0
 fi
 
+# 워치리스트 24종목 ticker_market 캐시 일괄 갱신 (KRX rate limit 보호 ~3초).
+# 실패해도 사이트 빌드는 진행 (캐시 stale 허용).
+echo "[publish] ticker_market 캐시 24종목 일괄 갱신"
+.venv/bin/python -m pipeline.bulk_ticker_refresh 2>&1 | tail -3 || \
+  echo "  [warn] bulk fetch 일부 실패 — stale 캐시로 사이트 빌드"
+
+echo ""
 echo "[publish] companies/ + daily_notes/ → HTML 렌더 → $SITE_KER_DIR"
 if ! .venv/bin/python -c "
 from pathlib import Path

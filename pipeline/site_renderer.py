@@ -871,6 +871,65 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
 }
 .filter-pill.active .pill-count { opacity: 0.85; }
 
+/* 마스터 표 — 등락률·시총 칼럼 (Phase F) */
+.watchlist-table th.change,
+.watchlist-table th.mcap {
+  font-family: var(--mono); font-size: 11px;
+  font-weight: 600; letter-spacing: 0.04em;
+  color: var(--text-muted); text-transform: uppercase;
+}
+.watchlist-table th.change { width: 80px; text-align: right; }
+.watchlist-table th.mcap { width: 200px; text-align: right; }
+
+tr.stock-row td.change {
+  font-family: var(--mono); font-size: 13px;
+  text-align: right; font-feature-settings: "tnum";
+  font-weight: 600;
+  white-space: nowrap;
+}
+tr.stock-row td.change.change-up { color: var(--kr-up); }
+tr.stock-row td.change.change-down { color: var(--kr-down); }
+tr.stock-row td.change.change-flat { color: var(--kr-flat); }
+
+tr.stock-row td.mcap {
+  font-family: var(--mono); font-size: 12px;
+  font-feature-settings: "tnum";
+  text-align: right;
+  white-space: nowrap;
+  position: relative;
+}
+.mcap-val {
+  display: inline-block; min-width: 50px;
+  text-align: right; margin-right: 8px;
+  color: var(--text-secondary); font-weight: 500;
+}
+.mcap-bar {
+  display: inline-block;
+  width: 120px; height: 6px;
+  background: var(--surface-hover);
+  border-radius: 1px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.mcap-fill {
+  display: block; height: 100%;
+  background: var(--accent-soft);
+  transition: background 120ms;
+}
+tr.stock-row.stock-active:hover .mcap-fill { background: var(--accent); }
+
+@media (max-width: 900px) {
+  .watchlist-table th.change,
+  tr.stock-row td.change { display: none; }
+  .watchlist-table th.mcap,
+  tr.stock-row td.mcap { width: auto; }
+  .mcap-bar { display: none; }
+}
+@media (max-width: 720px) {
+  .watchlist-table th.mcap,
+  tr.stock-row td.mcap { display: none; }
+}
+
 /* Daily 메모 (Phase D) */
 .daily-link-banner {
   margin-top: 24px;
@@ -1682,18 +1741,69 @@ def render_master_index(
         )
 
     # Compact dashboard 표
+    # 24종목 ticker_market 캐시 읽기 (없으면 빈 dict)
+    ticker_data: dict[str, dict] = {}
+    cache_dir = Path("/home/soccz/22tb/report/pipeline/cache")
+    if cache_dir.exists():
+        import json as _json
+        for w in watchlist:
+            if not w.ticker:
+                continue
+            cache_path = cache_dir / f"ticker_market_{w.ticker}.json"
+            if cache_path.exists():
+                try:
+                    ticker_data[w.ticker] = _json.loads(cache_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+
+    # 시총 bar 정규화용 (24종목 중 최대 시총 기준)
+    max_market_cap = max(
+        (
+            d.get("market_cap_trillion_krw") or 0
+            for d in ticker_data.values()
+        ),
+        default=1.0,
+    ) or 1.0
+
+    def _change_cell(d: dict | None) -> str:
+        if not d or d.get("close_60d_pct_change") is None:
+            return '<td class="change">—</td>'
+        pct = d["close_60d_pct_change"]
+        if pct > 0.5:
+            cls, sign = "change-up", "+"
+        elif pct < -0.5:
+            cls, sign = "change-down", ""
+        else:
+            cls, sign = "change-flat", ""
+        return f'<td class="change {cls}">{sign}{pct:.1f}%</td>'
+
+    def _market_cap_cell(d: dict | None) -> str:
+        if not d or not d.get("market_cap_trillion_krw"):
+            return '<td class="mcap">—</td>'
+        mc = d["market_cap_trillion_krw"]
+        bar_pct = min(mc / max_market_cap * 100, 100)
+        return (
+            f'<td class="mcap">'
+            f'<span class="mcap-val">{mc:,.0f}조</span>'
+            f'<span class="mcap-bar"><span class="mcap-fill" style="width:{bar_pct:.1f}%"></span></span>'
+            f'</td>'
+        )
+
     rows_html: list[str] = []
     for sector, sector_entries in sector_groups.items():
         # 섹터 헤더 행
         with_reports = sum(1 for w in sector_entries if w.name in companies)
         rows_html.append(
             f'<tr class="sector-header" data-sector="{escape(sector)}">'
-            f'<td colspan="5">'
+            f'<td colspan="6">'
             f'<span class="sector-name">{escape(sector)}</span>'
             f'<span class="sector-stat">{with_reports}/{len(sector_entries)}</span>'
             f'</td></tr>'
         )
         for w in sector_entries:
+            tdata = ticker_data.get(w.ticker)
+            change_cell = _change_cell(tdata)
+            mcap_cell = _market_cap_cell(tdata)
             if w.name in companies:
                 latest = sorted(companies[w.name], key=lambda x: x.period, reverse=True)[0]
                 friendly = _period_to_friendly(latest.period)
@@ -1706,8 +1816,9 @@ def render_master_index(
                     f'<td class="status"><span class="dot dot-active"></span></td>'
                     f'<td class="name"><strong>{escape(w.name)}</strong>'
                     f'<span class="ticker">{escape(w.ticker) if w.ticker else ""}</span></td>'
-                    f'<td class="latest">{escape(friendly)}</td>'
-                    f'<td class="date">{escape(latest.written_at)}</td>'
+                    f'{change_cell}'
+                    f'{mcap_cell}'
+                    f'<td class="latest">{escape(friendly)} · {escape(latest.written_at)}</td>'
                     f'<td class="action">{report_label} →</td>'
                     f'</tr>'
                 )
@@ -1717,7 +1828,9 @@ def render_master_index(
                     f'<td class="status"><span class="dot dot-empty"></span></td>'
                     f'<td class="name">{escape(w.name)}'
                     f'<span class="ticker">{escape(w.ticker) if w.ticker else ""}</span></td>'
-                    f'<td class="latest" colspan="2"><em class="empty-text">추적 중 — 첫 정기공시 도착 시 자동</em></td>'
+                    f'{change_cell}'
+                    f'{mcap_cell}'
+                    f'<td class="latest"><em class="empty-text">추적 중</em></td>'
                     f'<td class="action">대기</td>'
                     f'</tr>'
                 )
@@ -1752,8 +1865,9 @@ def render_master_index(
     <tr>
       <th class="status">●</th>
       <th class="name">종목</th>
+      <th class="change">60일</th>
+      <th class="mcap">시가총액</th>
       <th class="latest">최신 보고서</th>
-      <th class="date">작성일</th>
       <th class="action"></th>
     </tr>
   </thead>
