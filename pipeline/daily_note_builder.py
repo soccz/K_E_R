@@ -41,6 +41,41 @@ class SparklinePoints:
             for x, y in self.normalized_points
         )
 
+    def to_svg_with_axis(self, width: int = 200, height: int = 50, label: str = "") -> str:
+        """축·툴팁이 있는 SVG. 브라우저 native title로 hover 시 첫·마지막 값 표시."""
+        if not self.normalized_points or not self.raw_closes:
+            return ""
+        polyline = self.to_svg_polyline_str(width, height - 12)
+        first = self.raw_closes[0]
+        last = self.raw_closes[-1]
+        first_date = self.dates[0] if self.dates else ""
+        last_date = self.dates[-1] if self.dates else ""
+        change_pct = (last / first - 1) * 100 if first else 0
+        cls = (
+            "spark-up" if change_pct > 0.5
+            else "spark-down" if change_pct < -0.5
+            else "spark-flat"
+        )
+        # 시작값·끝값을 SVG 좌상·우상에 작은 텍스트로
+        first_str = f"{first:,.0f}"
+        last_str = f"{last:,.0f}"
+        max_str = f"max {self.max_value:,.0f}"
+        min_str = f"min {self.min_value:,.0f}"
+        title = (
+            f"{label}\n시작 ({first_date}): {first_str}\n현재 ({last_date}): {last_str}\n"
+            f"변화: {change_pct:+.1f}%"
+        )
+        return (
+            f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
+            f'class="dn-spark {cls}">'
+            f'<title>{title}</title>'
+            f'<polyline points="{polyline}" fill="none" stroke-width="1.5" '
+            f'vector-effect="non-scaling-stroke" transform="translate(0,8)"/>'
+            f'<text x="2" y="6" class="dn-spark-label">{first_str}</text>'
+            f'<text x="{width - 2}" y="6" class="dn-spark-label" text-anchor="end">{last_str}</text>'
+            f'</svg>'
+        )
+
 
 @dataclass(frozen=True)
 class TickerCardData:
@@ -100,9 +135,7 @@ class DailyNote:
             d1 = f"{m.change_pct_1d:+.2f}%" if m.change_pct_1d is not None else "n/a"
             d60 = f"{m.change_pct_60d:+.1f}%" if m.change_pct_60d is not None else "n/a"
             spark = (
-                f'<svg width="120" height="30" viewBox="0 0 120 30">'
-                f'<polyline points="{m.sparkline.to_svg_polyline_str()}" '
-                f'fill="none" stroke="#444" stroke-width="1.5"/></svg>'
+                m.sparkline.to_svg_with_axis(width=140, height=36, label=f"{m.label} 60일")
                 if m.sparkline
                 else "—"
             )
@@ -125,10 +158,8 @@ class DailyNote:
                     f"[{c.sector or '?'}]  {arrow} {c.pct_change:+.2f}%"
                 )
                 out.append("")
-                spark = (
-                    f'<svg width="200" height="40" viewBox="0 0 200 40">'
-                    f'<polyline points="{c.sparkline_60d.to_svg_polyline_str(width=200, height=40)}" '
-                    f'fill="none" stroke="#0066cc" stroke-width="1.5"/></svg>'
+                spark = c.sparkline_60d.to_svg_with_axis(
+                    width=240, height=54, label=f"{c.company_name} 60일 종가"
                 )
                 out.append(f"60일 종가 시계열: {spark}")
                 out.append("")

@@ -35,6 +35,7 @@ class TickerMarketSnapshot:
     market_cap_trillion_krw: float | None
     close_60d_pct_change: float | None  # 최근 60일 등락률
     close_1y_pct_change: float | None  # 최근 1년 등락률
+    closes_60d: list[float] = field(default_factory=list)  # 60일 종가 시계열 (sparkline용)
     sources: dict[str, str] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
@@ -170,6 +171,8 @@ def _fetch_krx_ohlcv(ticker_krx: str, days: int = 400) -> dict:
         c_first = float(closes.iloc[0])
         if c_first:
             out["close_1y_pct_change"] = round((latest_close / c_first - 1) * 100, 2)
+    # 60일 종가 시계열 (sparkline용)
+    out["closes_60d"] = [float(c) for c in closes.tail(60).tolist()]
     return out
 
 
@@ -234,6 +237,7 @@ def fetch_ticker_snapshot(
         market_cap_trillion_krw=market_cap_t,
         close_60d_pct_change=krx_ohlcv.get("close_60d_pct_change"),
         close_1y_pct_change=krx_ohlcv.get("close_1y_pct_change"),
+        closes_60d=krx_ohlcv.get("closes_60d", []),
         sources=sources,
         notes=notes,
     )
