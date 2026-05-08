@@ -1,0 +1,15 @@
+[Unit]
+Description=K_E_R daily note — 매일 16:00 KST (장 마감 +30분)
+Documentation=https://github.com/soccz/K_E_R
+
+[Timer]
+# 매일 16:00 KST (KRX 장 마감 15:30 + 30분 버퍼). 평일·주말 모두 실행.
+# 비-거래일은 KRX 데이터 미변동 → 트리거 0건 → silently 종료.
+OnCalendar=*-*-* 16:00:00
+# 슬롯 시간에 컴퓨터가 꺼져있었으면 부팅 즉시 catch-up
+Persistent=true
+RandomizedDelaySec=120
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

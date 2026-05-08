@@ -1,0 +1,18 @@
+[Unit]
+Description=K_E_R daily note — 임계치 기반 외부 노출 트랙
+Documentation=https://github.com/soccz/K_E_R
+After=network-online.target k_e_r-daily-refresh.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/soccz/22tb/report
+EnvironmentFile=/home/soccz/22tb/report/.env
+ExecStart=/home/soccz/22tb/report/bin/run_daily.sh
+StandardOutput=append:/home/soccz/22tb/report/logs/daily.log
+StandardError=append:/home/soccz/22tb/report/logs/daily.log
+TimeoutStartSec=2400
+Nice=10
+
+[Install]
+WantedBy=default.target

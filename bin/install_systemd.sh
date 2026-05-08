@@ -36,13 +36,15 @@ if ! command -v claude &> /dev/null; then
 fi
 
 # 1. wrapper 스크립트 실행 권한
-chmod +x "$REPO_ROOT/bin/run_weekly.sh" "$REPO_ROOT/bin/run_weekend.sh"
+chmod +x "$REPO_ROOT/bin/run_weekly.sh" "$REPO_ROOT/bin/run_weekend.sh" \
+         "$REPO_ROOT/bin/run_daily.sh"
 
 # 2. systemd unit 파일 복사
 mkdir -p "$USER_SYSTEMD_DIR"
 for f in k_e_r-weekday.service k_e_r-weekday.timer \
          k_e_r-weekend.service k_e_r-weekend.timer \
-         k_e_r-daily-refresh.service k_e_r-daily-refresh.timer; do
+         k_e_r-daily-refresh.service k_e_r-daily-refresh.timer \
+         k_e_r-daily.service k_e_r-daily.timer; do
   cp "$REPO_ROOT/systemd/$f" "$USER_SYSTEMD_DIR/$f"
   echo "  installed: $USER_SYSTEMD_DIR/$f"
 done
@@ -53,13 +55,16 @@ echo "  systemctl --user daemon-reload"
 
 # 4. timer enable + start
 systemctl --user enable --now k_e_r-weekday.timer
-echo "  enabled: k_e_r-weekday.timer (Tue 22:00 KST — 보고서 생성)"
+echo "  enabled: k_e_r-weekday.timer (Tue 22:00 KST — 사업보고서 풀 진단 1편)"
 
 systemctl --user enable --now k_e_r-daily-refresh.timer
-echo "  enabled: k_e_r-daily-refresh.timer (매일 18:00 KST — 매크로 갱신)"
+echo "  enabled: k_e_r-daily-refresh.timer (매일 18:00 KST — 매크로 캐시 갱신)"
 
 systemctl --user enable --now k_e_r-weekend.timer
-echo "  enabled: k_e_r-weekend.timer (Sun 21:00 KST — 종목 보고서 대체. 산업노트 generator 구현 후 진짜 산업노트로 전환)"
+echo "  enabled: k_e_r-weekend.timer (Sun 21:00 KST — 산업노트 generator 미구현 시 평일판 대체)"
+
+systemctl --user enable --now k_e_r-daily.timer
+echo "  enabled: k_e_r-daily.timer (매일 16:00 KST — 일간 메모 임계치 트리거)"
 
 # 5. 로그인 안 된 상태에서도 user service 동작 (lingering)
 # 이게 핵심 — 이거 없으면 user 로그아웃 시 timer 멈춤
