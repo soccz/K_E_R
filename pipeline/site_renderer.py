@@ -1040,24 +1040,23 @@ def render_daily_index(
     </p>
   </header>
 
+  <section class="dn-archive">
+    {body_inner}
+  </section>
+
   <section class="dn-method">
     <h2>운영 원칙</h2>
     <ul>
-      <li><strong>트리거</strong> — 가격 ±5% / 외인 ±500억 3일 / DART 주요 공시 / 디커플링 (4종 종합)</li>
-      <li><strong>출처</strong> — XBRL · DART OpenAPI · KRX OHLCV (1순위만)</li>
-      <li><strong>금지</strong> — 목표주가 · % 예측 · 양다리 결론</li>
-      <li><strong>구조</strong> — 매크로 · 관찰 · 종목 카드 1~3 · 섹터 톤</li>
+      <li><strong>트리거</strong> 가격 ±5% / 외인 ±500억 3일 / DART 주요 공시 / 디커플링</li>
+      <li><strong>출처</strong> XBRL · DART OpenAPI · KRX OHLCV (1순위만)</li>
+      <li><strong>금지</strong> 목표주가 · % 예측 · 양다리 결론</li>
+      <li><strong>구조</strong> 매크로 · 관찰 · 종목 카드 1~3 · 섹터 톤</li>
     </ul>
     <p class="dn-method-meta">
       <a href="https://github.com/soccz/K_E_R/blob/main/_persona.md">페르소나</a> ·
       <a href="https://github.com/soccz/K_E_R/blob/main/_daily_note_spec.md">spec</a> ·
       <a href="https://github.com/soccz/K_E_R">K_E_R repo</a>
     </p>
-  </section>
-
-  <section class="dn-archive">
-    <h2>관찰 시계열</h2>
-    {body_inner}
   </section>
 </div>'''
 

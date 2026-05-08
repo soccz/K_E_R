@@ -988,34 +988,15 @@ tr.stock-row.stock-active:hover .mcap-fill { background: var(--accent); }
   font-size: 16px;
 }
 
-/* Daily 인덱스 페이지 — observation log 톤 (2-column 데이터 보드) */
+/* Daily 인덱스 페이지 — observation log 톤 (단일 열, lab notebook 느낌) */
 .dn-page {
-  max-width: 1180px; margin: 24px auto 60px;
+  max-width: 760px; margin: 24px auto 60px;
   padding: 0 32px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  grid-template-areas:
-    "header header"
-    "archive method";
-  gap: 28px 36px;
-  align-items: start;
 }
-.dn-header  { grid-area: header; }
-.dn-archive { grid-area: archive; min-width: 0; }
-.dn-method  { grid-area: method; position: sticky; top: 80px; }
 
 .dn-header {
   border-bottom: 2px solid var(--rule);
-  padding-bottom: 20px;
-}
-
-@media (max-width: 900px) {
-  .dn-page {
-    grid-template-columns: 1fr;
-    grid-template-areas: "header" "method" "archive";
-    gap: 24px;
-  }
-  .dn-method { position: static; }
+  padding-bottom: 20px; margin-bottom: 28px;
 }
 .dn-header-meta {
   display: flex; justify-content: space-between; align-items: center;
@@ -1034,31 +1015,30 @@ tr.stock-row.stock-active:hover .mcap-fill { background: var(--accent); }
   max-width: 640px;
 }
 
+/* Method footnote — 페이지 하단, 작은 reference 톤 */
 .dn-method {
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  padding: 18px 22px;
+  margin-top: 48px; padding-top: 20px;
+  border-top: 1px solid var(--rule);
+  font-size: 12px; color: var(--text-dim);
+  font-family: var(--mono); line-height: 1.85;
 }
 .dn-method h2 {
-  font-size: 12px; font-family: var(--mono);
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--text-dim); margin: 0 0 10px;
+  font-size: 11px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-dim);
+  margin: 0 0 8px; font-weight: 500;
 }
 .dn-method ul {
-  list-style: none; padding: 0; margin: 0;
-  font-size: 13.5px; line-height: 1.75;
+  list-style: none; padding: 0; margin: 0 0 10px;
 }
-.dn-method ul li { padding: 2px 0; }
+.dn-method ul li { padding: 1px 0; }
 .dn-method ul li strong {
-  display: inline-block; min-width: 56px;
-  font-family: var(--mono); font-size: 11px;
-  color: var(--text-dim); font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.04em;
-  margin-right: 8px;
+  display: inline-block; min-width: 50px;
+  font-size: 11px; color: var(--text-dim);
+  font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.04em; margin-right: 8px;
 }
 .dn-method-meta {
-  margin: 14px 0 0; font-size: 12px;
-  color: var(--text-dim); font-family: var(--mono);
+  margin: 8px 0 0; font-size: 11px;
 }
 .dn-method-meta a {
   color: var(--text-dim); text-decoration: none;
@@ -1066,12 +1046,7 @@ tr.stock-row.stock-active:hover .mcap-fill { background: var(--accent); }
 }
 .dn-method-meta a:hover { color: var(--accent); border-color: var(--accent); }
 
-.dn-archive h2 {
-  font-size: 12px; font-family: var(--mono);
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--text-dim); margin: 0 0 14px;
-  padding-bottom: 6px; border-bottom: 1px solid var(--rule);
-}
+.dn-archive { min-width: 0; }
 
 .dn-list { list-style: none; padding: 0; margin: 0; }
 .dn-item {
