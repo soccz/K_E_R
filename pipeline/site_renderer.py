@@ -933,11 +933,14 @@ def render_daily_note_to_html(
     md_text = md_path.read_text(encoding="utf-8")
     body_html = _md_to_html(md_text)
     title = f"{fetch_date} 일간 메모 — K_E_R"
-    breadcrumb = (
-        f'<a href="../">K_E_R</a> · '
-        f'<a href="./">일간 메모</a> · '
-        f'<span>{fetch_date}</span>'
-    )
+    breadcrumb = f"""
+<div class="container" style="padding-top:24px; padding-bottom:0; font-size:12px; color:var(--text-muted); letter-spacing:0.04em;">
+  <a href="../" style="color:var(--text-muted)">K_E_R</a>
+  &nbsp;/&nbsp;
+  <a href="./" style="color:var(--text-muted)">Daily Notes</a>
+  &nbsp;/&nbsp;
+  <span style="color:var(--text-secondary)">{fetch_date}</span>
+</div>"""
     description = (
         f"K_E_R {fetch_date} 일간 관찰 노트 — 페르소나 + 학술 톤. "
         f"매수·매도 권고가 아닌 공개 관찰 기록."
@@ -1058,7 +1061,12 @@ def render_daily_index(
   </section>
 </div>'''
 
-    breadcrumb = '<a href="../">K_E_R</a> · <span>Daily Notes</span>'
+    breadcrumb = """
+<div class="container" style="padding-top:24px; padding-bottom:0; font-size:12px; color:var(--text-muted); letter-spacing:0.04em;">
+  <a href="../" style="color:var(--text-muted)">K_E_R</a>
+  &nbsp;/&nbsp;
+  <span style="color:var(--text-secondary)">Daily Notes</span>
+</div>"""
     description = (
         "K_E_R 일간 관찰 노트 시계열. DART 공시·KRX 가격·외인 수급·디커플링 "
         "4종 임계치 통과 시 자동 발행. 매수·매도 권고 아님."
