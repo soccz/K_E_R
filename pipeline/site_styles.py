@@ -953,27 +953,50 @@ tr.stock-row.stock-active:hover .mcap-fill { background: var(--accent); }
 .daily-banner-label {
   font-family: var(--mono); font-size: 11px;
   letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 .daily-banner-count {
-  font-family: var(--mono); font-size: 13px; font-weight: 600;
-  padding: 2px 8px; background: var(--rule); border-radius: 2px;
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  padding: 3px 10px;
+  background: var(--accent); color: #fff;
+  border-radius: 3px;
+  letter-spacing: 0.02em;
+}
+:root[data-theme="dark"] .daily-banner-count {
+  color: #0d1117;
 }
 .daily-banner-meta {
-  flex: 1; font-size: 13px; color: var(--text-dim);
+  flex: 1; font-size: 13px; color: var(--text-muted);
 }
 .daily-banner-arrow {
-  font-family: var(--mono); color: var(--text-dim);
+  font-family: var(--mono); color: var(--text-muted);
+  font-size: 16px;
 }
 
-/* Daily 인덱스 페이지 — observation log 톤 */
+/* Daily 인덱스 페이지 — observation log 톤 (2-column 데이터 보드) */
 .dn-page {
-  max-width: 820px; margin: 24px auto 60px;
-  padding: 0 24px;
+  max-width: 1180px; margin: 24px auto 60px;
+  padding: 0 32px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 36px;
+  align-items: start;
 }
 .dn-header {
+  grid-column: 1 / -1;
   border-bottom: 2px solid var(--rule);
-  padding-bottom: 20px; margin-bottom: 28px;
+  padding-bottom: 20px; margin-bottom: 8px;
+}
+.dn-archive { grid-column: 1; min-width: 0; }
+.dn-method  { grid-column: 2; margin-top: 0; position: sticky; top: 80px; }
+
+@media (max-width: 900px) {
+  .dn-page {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .dn-archive, .dn-method { grid-column: 1; }
+  .dn-method { position: static; }
 }
 .dn-header-meta {
   display: flex; justify-content: space-between; align-items: center;
@@ -995,7 +1018,7 @@ tr.stock-row.stock-active:hover .mcap-fill { background: var(--accent); }
 .dn-method {
   background: var(--surface);
   border: 1px solid var(--rule);
-  padding: 18px 22px; margin: 24px 0 36px;
+  padding: 18px 22px;
 }
 .dn-method h2 {
   font-size: 12px; font-family: var(--mono);

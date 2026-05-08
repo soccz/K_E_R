@@ -999,12 +999,15 @@ def render_daily_index(
             f'</a></li>'
         )
 
-    # 다음 자동 실행 시점 (매일 16:00 KST)
+    # 다음 자동 실행 시점 — 평일(Mon..Fri) 16:00 KST. 토·일은 KRX 휴장 → skip.
     now = datetime.now()
     next_run = now.replace(hour=16, minute=0, second=0, microsecond=0)
     if now >= next_run:
         next_run += timedelta(days=1)
-    next_run_str = next_run.strftime("%Y-%m-%d %H:%M KST")
+    while next_run.weekday() >= 5:  # 5=토, 6=일
+        next_run += timedelta(days=1)
+    weekday_kr = ["월", "화", "수", "목", "금", "토", "일"][next_run.weekday()]
+    next_run_str = next_run.strftime("%Y-%m-%d") + f"({weekday_kr}) " + next_run.strftime("%H:%M KST")
 
     n_notes = len(notes_sorted)
 
