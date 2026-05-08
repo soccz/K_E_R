@@ -69,8 +69,14 @@ def test_user_prompt_includes_xbrl_summary_when_given():
         dart_data={"filings": [{"name": "report.xml", "text": "본문"}]},
         market_data={},
         source_pack_summary={
-            "core_consolidated_facts": [
-                {"label": "수익(매출액)", "value_trillion_krw": 97.1467}
+            "core_consolidated_timeseries": [
+                {
+                    "concept": "ifrs-full:Revenue",
+                    "label": "수익(매출액)",
+                    "timeseries": [
+                        {"value_trillion_krw": 97.1467, "period": "2025-01-01 ~ 2025-12-31"}
+                    ],
+                }
             ]
         },
     )

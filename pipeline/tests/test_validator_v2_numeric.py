@@ -99,16 +99,58 @@ def test_direct_match_passes():
     assert result.passed
 
 
-def test_scale_mismatch_warns():
-    """v0.1: scale mismatch는 warn (hard fail 아님). result.passed=True 유지."""
+def test_scale_mismatch_now_fails():
+    """v0.2: scale mismatch는 hard fail. SK하이닉스 08의 '826억 vs 8,263억' 같은 케이스 차단."""
     pack = _MockPack([_MockFact("OperatingIncome", 15.094e12)])
     result = validate_numeric_claims(
         "DS 2023년 △1.5조원 적자",
         pack,
     )
-    assert result.passed  # warn-only: 항상 pass
-    cats = [w.category for w in result.warnings]
+    assert not result.passed
+    cats = [v.category for v in result.failures]
     assert "numeric_scale_mismatch" in cats
+
+
+def test_dividend_unit_typo_caught():
+    """v0.2 회귀 테스트: '826억' (실제 8,263억) 같은 자릿수 오류를 fail로 잡는다."""
+    pack = _MockPack([_MockFact("DividendsPaid", 8.263e11)])  # 8,263억 = 8.263e11
+    result = validate_numeric_claims("2024년 배당금: 826억 원", pack)
+    assert not result.passed
+    cats = [v.category for v in result.failures]
+    assert "numeric_scale_mismatch" in cats
+
+
+def test_market_cap_skipped_by_external_keyword():
+    """v0.3 회귀: 시총 1,204조가 자본구성요소 121조와 10x 매치돼도 fail 아님 (false positive)."""
+    # source_pack에 우연히 121조 fact가 있다고 가정
+    pack = _MockPack([_MockFact("기타자본구성요소", 1.21e14)])  # 121조
+    text = "시가총액 1,204.1조원 (KRX 종가 × 발행주식수)"
+    result = validate_numeric_claims(text, pack)
+    assert result.passed
+    # claims 자체가 추출되지 않음 (라인 skip)
+    claims = extract_numeric_claims(text)
+    assert claims == []
+
+
+def test_close_price_line_skipped():
+    """종가 라인은 V2 skip."""
+    pack = _MockPack([_MockFact("Revenue", 1.65e10)])  # 165억
+    text = "KRX 2026-05-07 종가 1,654,000원"
+    # 1,654,000원은 100억 미만이라 어차피 검출 안 되지만, 명시적 skip 검증
+    claims = extract_numeric_claims(text)
+    # 'KRX' + '종가' 키워드로 skip
+    assert claims == []
+
+
+def test_normal_xbrl_line_still_validated():
+    """일반 재무 라인(시총·종가 키워드 없음)은 그대로 V2 검증."""
+    pack = _MockPack([_MockFact("OperatingIncome", 47.21e12)])
+    # 정상 인용
+    result = validate_numeric_claims("2025년 영업이익 47.21조원 [XBRL]", pack)
+    assert result.passed
+    # 자릿수 오류 — fail
+    result = validate_numeric_claims("2025년 영업이익 4.7조원 [XBRL]", pack)
+    assert not result.passed
 
 
 def test_unverified_is_warning_not_fail():
@@ -146,12 +188,13 @@ def test_abs_or_rounded_match_warns_without_scale_mismatch():
     assert "numeric_scale_mismatch" not in cats
 
 
-def test_render_retry_returns_empty_in_v0_1():
-    """v0.1: failures=[]라 render_numeric_failures_for_retry는 empty 반환."""
+def test_render_retry_emits_for_scale_mismatch():
+    """v0.2: scale_mismatch는 fail이므로 retry 피드백 비어있지 않아야 한다."""
     pack = _MockPack([_MockFact("OperatingIncome", 15.094e12)])
     result = validate_numeric_claims("DS 2023년 △1.5조 적자", pack)
     feedback = render_numeric_failures_for_retry(result)
-    assert feedback == ""
+    assert feedback != ""
+    assert "자릿수" in feedback
 
 
 # ----- real Samsung XBRL integration -----

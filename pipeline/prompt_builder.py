@@ -143,6 +143,30 @@ def build_section_system_prompt(frame: FrameSpec, section_id: str) -> str:
         f"- 비유 한 줄 의무.\n"
         f"- 섹션 끝에 \"이번 회 등장 용어: A, B, C\" 메타 라인.\n"
         f"- 출력은 마크다운. 섹션 헤더는 `## {section_id}`로 시작.\n"
+        f"\n"
+        f"## 숫자·단위 절대 규칙 (위반 시 V2/V4 validator hard fail)\n"
+        f"- 모든 큰 숫자는 user prompt의 `core_consolidated_timeseries`에서 직접 인용하거나, 그 값으로부터 산술적으로 도출(부채/자본 등)해야 한다.\n"
+        f"- 단위는 **'조' 또는 '억'**으로 통일. 1조 = 10,000억 = 1,000,000,000,000원이다.\n"
+        f"  - 예: XBRL 1,681,166백만원 = **1조 6,812억** = 1.68조. **'1,681억'으로 적으면 자릿수 오류 (10배 작음)**.\n"
+        f"  - 한 보고서 안에서 같은 항목의 단위 표기를 일관되게 유지.\n"
+        f"- timeseries에 특정 연도 값이 비어 있으면 그 연도는 본문 표에서도 '확인되지 않음'으로 적는다. 다른 출처에서 가져와도 안 되고, 추정치를 단언으로 적어도 안 된다.\n"
+        f"- **헤드라인·요약 박스에 단언으로 적은 숫자**는 같은 보고서 본문에서도 똑같은 숫자로 일관되게 인용되어야 한다. 본문 표가 '확인되지 않음'인 항목을 헤드라인에서 단언으로 쓰지 말 것.\n"
+        f"\n"
+        f"## 권위 사실(authoritative facts) 인용 절대 규칙 (V4 cross-section consistency)\n"
+        f"다음 사실은 1순위 출처에서 정확한 값이 제공되며, 모든 섹션이 *같은 값*으로 인용해야 한다:\n"
+        f"- **시가총액**: market_data.ticker_snapshot.market_cap_trillion_krw (KRX 종가 × DART 발행주식수)\n"
+        f"- **2025 연결 매출·영업이익·영업CF·capex**: source_pack.core_consolidated_timeseries\n"
+        f"- **1Q 잠정실적 영업이익**: market_data.quarterly_disclosures.interim_filings[0].body_excerpt 안의 숫자\n"
+        f"\n"
+        f"이 사실들은 추정·환각 절대 금지. 학습 데이터 기반으로 '시가총액 약 80조' 같은 옛 시점 숫자를 적으면 V4 hard fail.\n"
+        f"잠정실적 본문(body_excerpt)에 '37조 6,103억원' 같이 적혀 있으면 그 숫자를 그대로 인용해야 하며, "
+        f"'1Q26 영업이익 6.97조' 같이 다른 추정값을 적으면 V4 hard fail.\n"
+        f"권위 사실에 대한 *(추론)* 마커는 무효 — 추론 라벨로 환각을 정당화할 수 없다.\n"
+        f"\n"
+        f"## 페르소나 톤 강화\n"
+        f"- 비판적·회의적이 기본 톤. 호재는 시장이 알아서 반영한다 — 너는 위험을 본다.\n"
+        f"- '그러나 ~할 가능성도 있다' 식의 양다리 결론 금지. 입장을 정하고 *왜 그렇게 보는지의 논리*를 보여줄 것.\n"
+        f"- 페르소나 적신호·호재 표의 ★★★ 항목이 자기 섹션에 해당하면 본문에서 *눈에 띄게* 강조 (별도 단락 또는 박스).\n"
     )
 
 
@@ -159,11 +183,14 @@ def build_section_user_prompt(
     ]
     if source_pack_summary is not None:
         parts.append(
-            f"# XBRL 핵심 재무 데이터 (우선 사용)\n```json\n"
+            f"# XBRL 핵심 재무 데이터 (우선 사용 — ground truth)\n```json\n"
             f"{json.dumps(source_pack_summary, ensure_ascii=False, indent=2)}\n"
             f"```\n\n"
-            f"재무 숫자 사실 주장은 위 XBRL 핵심 데이터와 DART 원문을 최우선 근거로 사용해라. "
-            f"위 데이터와 맞지 않는 학습기반 숫자 추정은 금지한다.\n\n"
+            f"재무 숫자 사실 주장은 위 XBRL 핵심 데이터와 DART 원문을 **최우선 1순위 근거**로 사용해라. "
+            f"위 데이터와 맞지 않는 학습기반 숫자 추정은 금지한다. "
+            f"위 timeseries에 특정 연도가 비어 있으면 그 연도는 '확인되지 않음'으로 처리하고, 추정치로 채우지 마라.\n\n"
+            f"단위 환산 참고: 1조 = 1e12원, 1억 = 1e8원. "
+            f"value_trillion_krw·value_eok_krw 컬럼이 모두 제공되니 둘 중 하나를 골라 일관되게 사용하라.\n\n"
         )
     parts.append(
         f"# DART 공시 데이터\n```json\n"

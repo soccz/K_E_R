@@ -21,8 +21,13 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 CLAUDE_CODE_BIN = os.getenv("CLAUDE_CODE_BIN", "claude")
 CLAUDE_CODE_MODEL = os.getenv("CLAUDE_CODE_MODEL", "sonnet")
-CLAUDE_CODE_TIMEOUT_SEC = int(os.getenv("CLAUDE_CODE_TIMEOUT_SEC", "600"))
-CLAUDE_CODE_NEUTRAL_CWD = os.getenv("CLAUDE_CODE_NEUTRAL_CWD", "/tmp")
+CLAUDE_CODE_TIMEOUT_SEC = int(os.getenv("CLAUDE_CODE_TIMEOUT_SEC", "1800"))
+# 사용자 글로벌 규칙: /tmp 직접 사용 금지 → /home/soccz/22tb/tmp 사용.
+# claude CLI subprocess의 작업 디렉토리. 환경변수 없으면 22tb 하위로 폴백.
+_DEFAULT_NEUTRAL_CWD = "/home/soccz/22tb/tmp"
+if not Path(_DEFAULT_NEUTRAL_CWD).exists():
+    _DEFAULT_NEUTRAL_CWD = "/tmp"  # 22tb 하위 미존재 환경 폴백
+CLAUDE_CODE_NEUTRAL_CWD = os.getenv("CLAUDE_CODE_NEUTRAL_CWD", _DEFAULT_NEUTRAL_CWD)
 
 DART_API_KEY = os.getenv("DART_API_KEY")
 DART_BASE_URL = "https://opendart.fss.or.kr/api"

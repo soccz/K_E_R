@@ -26,11 +26,16 @@ from datetime import datetime
 from pathlib import Path
 
 from pipeline import config, snapshot
+from pipeline.business_report_extractor import extract_from_filing_dir
 from pipeline.corp_code_mapper import fetch_corp_code_mapping, update_watchlist_md
+from pipeline.cross_section_consistency import build_authoritative_facts
 from pipeline.dart_client import DartClient, REPRT_CODE_LABELS
+from pipeline.foreign_holdings import load_foreign_holding_snapshot
 from pipeline.frame_loader import load_frame
 from pipeline.local_data_loader import load_local_dart_data
+from pipeline.macro_data import load_macro_snapshot
 from pipeline.prompt_builder import SECTION_SPECS, DataTimestamps
+from pipeline.quarterly_disclosure import load_quarterly_disclosures
 from pipeline import report_quality
 from pipeline.report_assembler import assemble_report
 from pipeline.section_builder import (
@@ -38,6 +43,7 @@ from pipeline.section_builder import (
     generate_section_with_validation,
 )
 from pipeline.source_pack import SourcePack, build_source_pack
+from pipeline.ticker_market_data import load_ticker_snapshot
 from pipeline.watchlist_parser import find_by_ticker, parse_watchlist
 
 
@@ -91,6 +97,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
     dart_dir = report_dir / "raw_inputs" / "dart_filings"
     xbrl_dir = report_dir / "raw_inputs" / "xbrl"
 
+    annual_rcept_dt: str | None = None
     if not args.skip_fetch:
         print(f"\nDART에서 정기보고서 검색 중...")
         filing = client.find_periodic_report(
@@ -102,6 +109,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
             print(f"ERROR: {company} {args.bsns_year} {args.reprt_code} 보고서 못 찾음")
             return 1
         print(f"  발견: {filing.report_nm} (rcept_no={filing.rcept_no}, 접수일={filing.rcept_dt})")
+        annual_rcept_dt = filing.rcept_dt
 
         print(f"\n공시 원문 다운로드 → {dart_dir}")
         docs = client.download_filing_document(filing.rcept_no, dart_dir)
@@ -153,16 +161,213 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         print(f"\n입력 품질 가드 경고")
         print(input_guard.render())
 
-    market_data = {"note": "auto mode (DART only) — 시장 데이터는 별도 보강"}
+    cache_dir = config.REPO_ROOT / "pipeline" / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    ticker_cache = cache_dir / f"ticker_market_{args.ticker}.json"
+    foreign_cache = cache_dir / f"foreign_holdings_{args.ticker}.json"
+
+    market_snapshot = None
+    foreign_snapshot = None
+    market_snap = None
+    try:
+        market_snap = load_ticker_snapshot(
+            ticker_cache,
+            ticker_krx=args.ticker,
+            company_name=company,
+            corp_code=entry.corp_code,
+            bsns_year=args.bsns_year,
+            reprt_code=args.reprt_code,
+        )
+        market_snapshot = market_snap.to_prompt_dict()
+        if market_snap.issued_shares_common:
+            print(
+                f"\n발행주식수(보통주): {market_snap.issued_shares_common:,} | "
+                f"자기주식: {market_snap.treasury_shares or '-'}"
+            )
+        else:
+            print(f"\n발행주식수: 확인되지 않음 (DART stockTotqySttus 응답 미흡)")
+        if market_snap.market_cap_trillion_krw:
+            d60 = (
+                f"{market_snap.close_60d_pct_change:+.1f}%"
+                if market_snap.close_60d_pct_change is not None
+                else "n/a"
+            )
+            d1y = (
+                f"{market_snap.close_1y_pct_change:+.1f}%"
+                if market_snap.close_1y_pct_change is not None
+                else "n/a"
+            )
+            print(
+                f"종가: {market_snap.latest_close_krw:,.0f}원 ({market_snap.latest_close_date}) | "
+                f"시가총액: {market_snap.market_cap_trillion_krw:.2f}조 "
+                f"(60d {d60} / 1y {d1y})"
+            )
+        elif market_snap.latest_close_krw:
+            print(f"종가: {market_snap.latest_close_krw:,.0f}원 (시총 계산 불가)")
+        else:
+            print("종가·시총: 확인되지 않음 (KRX OHLCV fetch 실패)")
+    except Exception as e:
+        print(f"\n[market] fetch 실패 — owner-valuation에서 '확인되지 않음'으로 처리: {e}")
+
+    foreign_snap = None
+    try:
+        foreign_snap = load_foreign_holding_snapshot(
+            foreign_cache,
+            ticker_krx=args.ticker,
+            company_name=company,
+            corp_code=entry.corp_code,
+        )
+        foreign_snapshot = foreign_snap.to_prompt_dict()
+        print(f"외인 보유 (DART 5%↑): {foreign_snap.foreign_major_holders_count}건")
+    except Exception as e:
+        print(f"[foreign] fetch 실패: {e}")
+
+    business_extraction = None
+    try:
+        extraction = extract_from_filing_dir(dart_dir)
+        if extraction.sections:
+            # 섹션당 max 3000자로 제한 — 10개 섹션 합 ~30KB. claude CLI timeout 회피.
+            business_extraction = extraction.to_prompt_dict(max_chars_per_section=3000)
+            print(f"사업보고서 섹션 추출: {list(extraction.sections.keys())}")
+    except Exception as e:
+        print(f"[business_report] 추출 실패: {e}")
+
+    # --skip-fetch면 캐시 디렉토리에서 첫 8자리(YYYYMMDD) 추출
+    if annual_rcept_dt is None:
+        for p in sorted(dart_dir.glob("*.xml")):
+            stem = p.stem
+            if len(stem) >= 8 and stem[:8].isdigit():
+                annual_rcept_dt = stem[:8]
+                break
+
+    quarterly_snapshot = None
+    if annual_rcept_dt:
+        quarterly_cache = cache_dir / f"quarterly_disclosure_{args.ticker}.json"
+        try:
+            qd_snap = load_quarterly_disclosures(
+                quarterly_cache,
+                company=company,
+                corp_code=entry.corp_code,
+                annual_rcept_dt=annual_rcept_dt,
+            )
+            quarterly_snapshot = qd_snap.to_prompt_dict()
+            n = len(qd_snap.interim_filings)
+            if n:
+                latest = qd_snap.interim_filings[0]
+                print(
+                    f"분기 잠정실적·분기보고서: {n}건, 최신 = "
+                    f"{latest.report_nm} ({latest.rcept_dt}, +{latest.days_after_annual}d)"
+                )
+            else:
+                print("분기 잠정실적: 사업보고서 이후 0건 (시점 그대로)")
+        except Exception as e:
+            print(f"[quarterly_disclosure] fetch 실패: {e}")
+    else:
+        print("annual_rcept_dt 미확보 — 분기 잠정실적 fetch skip")
+
+    macro_snaps = []
+    try:
+        macro_cache = cache_dir / "macro_snapshot.json"
+        macro_snaps = load_macro_snapshot(macro_cache)
+        if macro_snaps:
+            print(f"매크로 지표: {len(macro_snaps)}개 ({', '.join(s.label for s in macro_snaps)})")
+    except Exception as e:
+        print(f"[macro] fetch 실패: {e}")
+
+    market_data: dict = {"note": "auto mode v0.4 — 시장·외인·사업보고서·분기잠정실적·매크로 통합"}
+    if market_snapshot:
+        market_data["ticker_snapshot"] = market_snapshot
+    if foreign_snapshot:
+        market_data["foreign_holding"] = foreign_snapshot
+    if business_extraction:
+        market_data["business_report_sections"] = business_extraction
+    if quarterly_snapshot:
+        market_data["quarterly_disclosures"] = quarterly_snapshot
+    if macro_snaps:
+        market_data["macro_indicators"] = {
+            "note": "페르소나 §6 매크로 의무 5종 (환율·유가·미국 금리·외인·지정학) 중 시장 시세 부분",
+            "indicators": [
+                {
+                    "label": s.label,
+                    "latest": s.latest_str,
+                    "change_pct_1d": s.change_pct_1d,
+                    "change_pct_1y": s.change_pct_1y,
+                    "period": f"{s.period_start} ~ {s.period_end}",
+                }
+                for s in macro_snaps
+            ],
+            "usage_rule": (
+                "환율(USD/KRW), 유가(WTI), KOSPI 지수는 페르소나 매크로 의무 5종 중 일부. "
+                "보고서 본문에서 *학습 지식 추정 금지* — 위 latest·change_pct_1y 수치만 인용. "
+                "값이 없으면 '확인되지 않음'."
+            ),
+        }
+
     today = datetime.now().strftime("%Y-%m-%d")
+    if market_snap and market_snap.latest_close_krw:
+        market_price_str = (
+            f"KRX {market_snap.latest_close_date} 종가 "
+            f"{market_snap.latest_close_krw:,.0f}원 "
+            f"(시총 {market_snap.market_cap_trillion_krw:.2f}조)"
+            if market_snap.market_cap_trillion_krw
+            else f"KRX {market_snap.latest_close_date} 종가 {market_snap.latest_close_krw:,.0f}원"
+        )
+    elif market_snapshot:
+        market_price_str = "(KRX 종가 fetch 실패 — 사업보고서 본문에서 추출 시도)"
+    else:
+        market_price_str = "(시장 데이터 fetch 실패 — 확인되지 않음)"
+    foreign_str = (
+        f"DART 5%↑ 보유공시 {foreign_snap.foreign_major_holders_count}건 — KRX 일별잔고 미통합"
+        if foreign_snapshot
+        else "(외인 데이터 fetch 실패)"
+    )
     timestamps = DataTimestamps(
         written_at=today,
         dart_query_at=f"DART API ({today})",
         financial_basis=f"{args.bsns_year} {REPRT_CODE_LABELS.get(args.reprt_code, '?')}",
-        market_price="(별도 시장 데이터 미포함 — 자동 모드 v0.1)",
-        foreign_holding="(별도 외인 데이터 미포함)",
+        market_price=market_price_str,
+        foreign_holding=foreign_str,
         macro_data="(별도 매크로 데이터 미포함)",
     )
+
+    # 권위 사실 dict 빌드 (V4 cross-section consistency용) — 시총·매출·영업이익·잠정실적
+    auth_facts = []
+    if source_pack is not None:
+        rev = next(
+            (f.value for f in source_pack.facts if f.concept == "ifrs-full:Revenue"
+             and f.period_end == f"{args.bsns_year}-12-31"
+             and (not f.dimensions or "ConsolidatedMember" in str(f.dimensions))),
+            None,
+        )
+        oi = next(
+            (f.value for f in source_pack.facts if f.concept == "dart:OperatingIncomeLoss"
+             and f.period_end == f"{args.bsns_year}-12-31"
+             and (not f.dimensions or "ConsolidatedMember" in str(f.dimensions))),
+            None,
+        )
+        ocf = next(
+            (f.value for f in source_pack.facts if f.concept == "ifrs-full:CashFlowsFromUsedInOperatingActivities"
+             and f.period_end == f"{args.bsns_year}-12-31"
+             and (not f.dimensions or "ConsolidatedMember" in str(f.dimensions))),
+            None,
+        )
+        capex = next(
+            (f.value for f in source_pack.facts
+             if f.concept == "ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities"
+             and f.period_end == f"{args.bsns_year}-12-31"
+             and (not f.dimensions or "ConsolidatedMember" in str(f.dimensions))),
+            None,
+        )
+        market_cap = market_snap.market_cap_krw if market_snap else None
+        auth_facts = build_authoritative_facts(
+            market_cap_krw=market_cap,
+            revenue_krw=rev,
+            operating_income_krw=oi,
+            operating_cash_flow_krw=ocf,
+            capex_krw=capex,
+        )
+        if auth_facts:
+            print(f"권위 사실 dict: {len(auth_facts)}개 항목 (V4 cross-section 검증용)")
 
     sections = list(SECTION_SPECS.keys()) if args.section == "all" else [args.section]
     if args.section != "all" and args.section not in SECTION_SPECS:
@@ -181,11 +386,30 @@ def _cmd_generate(args: argparse.Namespace) -> int:
                 dart_data=dart_data,
                 market_data=market_data,
                 source_pack=source_pack,
+                authoritative_facts=auth_facts,
             )
         except SectionBuildError as e:
-            print(f"  FAILED. V1: {e.v1.passed}, V3: {e.v3.passed}")
-            print(f"  V3 detail: {e.v3.render()}")
-            for i, raw in enumerate(getattr(e, "raw_outputs", []), 1):
+            v2_passed = e.v2.passed if e.v2 is not None else True
+            v4_passed = len(e.v4) == 0
+            print(f"  FAILED. V1: {e.v1.passed}, V2: {v2_passed}, V3: {e.v3.passed}, V4: {v4_passed}")
+            if not e.v1.passed:
+                print(f"  V1 detail: {e.v1.render()[:1500]}")
+            if not e.v3.passed:
+                print(f"  V3 detail: {e.v3.render()[:1500]}")
+            if e.v2 is not None and not e.v2.passed:
+                print(f"  V2 fails ({len(e.v2.failures)}):")
+                for f in e.v2.failures[:10]:
+                    print(f"    L{f.line} [{f.category}] {f.snippet[:80]}")
+                    print(f"      → {f.message[:600]}")
+            if e.v4:
+                print(f"  V4 fails ({len(e.v4)}):")
+                for v in e.v4[:10]:
+                    print(
+                        f"    L{v.line_no} '{v.fact_label}' "
+                        f"기대 {v.expected_krw/1e12:.2f}조, 발견 '{v.found_text}' "
+                        f"({v.found_value_krw/1e12:.2f}조, 편차 {v.deviation_pct:+.1f}%)"
+                    )
+            for i, raw in enumerate(e.raw_outputs, 1):
                 snapshot.save_section_raw(report_dir, f"{sec}.attempt-{i}.failed", raw)
             failed_any = True
             continue
@@ -236,6 +460,8 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         timestamps=timestamps,
         frame=frame,
         write_owner_summary=not args.skip_owner_summary,
+        market_snapshot=market_snapshot,
+        foreign_snapshot=foreign_snapshot,
     )
     assembled_guard = report_quality.validate_generated_text(
         target.read_text(encoding="utf-8")

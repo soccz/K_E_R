@@ -86,10 +86,110 @@ def validate_generation_inputs(
     return GuardResult(passed=not failures, failures=failures, warnings=warnings)
 
 
+_NOT_CONFIRMED_PATTERN = re.compile(r"확인되지\s*않음")
+_INFERENCE_MARKER = re.compile(r"\*?\(?\s*추론.*?\)?\*?|\[추론.*?\]")
+# 미래·예정 키워드 — 미확인 라인이 미래 시기 한정이면 과거/현재 단언과 충돌 아님
+_FUTURE_KEYWORDS = re.compile(
+    r"(2026|2027|2028|2029|2030|미래|향후|가이던스|예정|계획|차기|다음 [분반]기|다음 연도)"
+)
+
+# 카테고리 키워드 — 같은 키워드가 *같은 의미로* 한 곳에서 '확인되지 않음', 다른 곳에서
+# 단언 숫자로 등장하면 충돌. 인접 단락(±60자)에 *동일 키워드*가 있어야 진짜 충돌로 본다.
+_CROSS_CHECK_KEYWORDS = (
+    "capex",
+    "유형자산 취득",
+    "배당금",
+    "외국인 보유",
+    "외국인 비중",
+    "시가총액",
+    "지역별 매출",
+    "HBM 매출",
+    "DRAM 매출",
+    "NAND 매출",
+    "WACC",
+)
+
+
+def find_inconsistencies(text: str) -> list[str]:
+    """진짜 충돌만 잡는다. *(추론)* 마커 단언은 제외.
+
+    v0.2 정책 (2026-05):
+      - 추론 마커가 같은 라인 또는 인접 라인에 있으면 단언으로 보지 않음 (페르소나 §3.3 정상 처리)
+      - 윈도우 ±60자로 좁힘 (이전 ±200자 → 인접 단락 false positive 줄임)
+      - 단언 숫자가 *동일 키워드와 같은 단락(±60자)*에 있을 때만 충돌로 본다
+        (예: 'capex 확인되지 않음' 단락 옆에 'capex 27조'가 있으면 진짜 충돌, 다른 항목 무관)
+    """
+    findings: list[str] = []
+    lower_text = text.lower()
+    big_num_pat = re.compile(r"[\d.,]+\s*(조|억)\s*원?")
+
+    for kw in _CROSS_CHECK_KEYWORDS:
+        kw_lower = kw.lower()
+        # 키워드 출현 위치 모두 수집
+        positions: list[int] = []
+        idx = 0
+        while True:
+            i = lower_text.find(kw_lower, idx)
+            if i == -1:
+                break
+            positions.append(i)
+            idx = i + len(kw_lower)
+        if not positions:
+            continue
+
+        # 각 출현이 '확인되지 않음 컨텍스트'인지 '단언 컨텍스트'인지 분류
+        # 미래 한정 미확인(예: '2026 capex 가이던스')은 별도로 분리 — 과거/현재 단언과 충돌 아님
+        unknown_positions: list[int] = []
+        future_unknown_positions: list[int] = []
+        assert_positions: list[int] = []
+        for p in positions:
+            window = text[max(0, p - 60) : p + 60]
+            line_start = text.rfind("\n", 0, p) + 1
+            line_end = text.find("\n", p)
+            if line_end == -1:
+                line_end = len(text)
+            line = text[line_start:line_end]
+
+            # 추론 마커가 라인에 있으면 — *(추론 — ... 미확인 ...)* 같은 정상 처리.
+            # NOT_CONFIRMED·단언 둘 다 분류 안 함 (false positive 방지).
+            if _INFERENCE_MARKER.search(line):
+                continue
+
+            if _NOT_CONFIRMED_PATTERN.search(line):
+                # 미래 한정 미확인은 별도 — 과거 단언과 충돌 아님
+                if _FUTURE_KEYWORDS.search(line):
+                    future_unknown_positions.append(p)
+                else:
+                    unknown_positions.append(p)
+                continue
+
+            # 윈도우 추론 마커 인접도 정상으로 본다
+            if _INFERENCE_MARKER.search(window):
+                continue
+
+            # 단언 후보: 같은 라인에 큰 숫자 있는지
+            if big_num_pat.search(line):
+                assert_positions.append(p)
+                continue
+            # 단언 후보: 윈도우 안에 큰 숫자 + '확인되지 않음' 없음
+            if big_num_pat.search(window) and not _NOT_CONFIRMED_PATTERN.search(window):
+                assert_positions.append(p)
+
+        # 진짜 충돌: '확인되지 않음 컨텍스트' 위치와 '단언 컨텍스트' 위치가 *별개*로 있어야
+        if unknown_positions and assert_positions:
+            findings.append(
+                f"키워드 '{kw}'가 같은 문서에서 '확인되지 않음'과 *추론 마커 없는* 단언 수치로 "
+                f"동시에 등장 — 본문/표/헤드라인 간 일관성 점검 필요"
+            )
+    return findings
+
+
 def validate_generated_text(text: str) -> GuardResult:
     markers = find_report_failure_markers(text)
     failures = [f"생성물에 실패/빈 데이터 마커가 남아 있습니다: {m}" for m in markers]
-    return GuardResult(passed=not failures, failures=failures)
+    inconsistencies = find_inconsistencies(text)
+    warnings = [f"일관성 충돌: {c}" for c in inconsistencies]
+    return GuardResult(passed=not failures, failures=failures, warnings=warnings)
 
 
 def is_usable_report(path: Path) -> bool:
