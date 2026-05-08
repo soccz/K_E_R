@@ -66,8 +66,14 @@ _SHARED_CSS = """
   --warn-light: #faf3df;
   --tag-bg: #eef0f4;
   --tag-text: #404a5c;
-  --max-w: 1180px;
-  --content-w: 760px;
+  /* 한국식 등락률 색 (KRX/네이버금융 표준): + 빨강 / - 파랑 */
+  --kr-up: #c63a2f;
+  --kr-up-light: #fdecea;
+  --kr-down: #1465c0;
+  --kr-down-light: #e7f0fa;
+  --kr-flat: #6b7387;
+  --max-w: 1280px;
+  --content-w: 900px;
   --sidebar-w: 240px;
   --radius-sm: 3px;
   --radius-md: 4px;
@@ -80,6 +86,80 @@ _SHARED_CSS = """
   --display: 'IBM Plex Sans', 'Inter', sans-serif;
   --mono: 'IBM Plex Mono', 'JetBrains Mono', Menlo, monospace;
 }
+
+/* 다크모드 — prefers-color-scheme + manual override (data-theme="dark") */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-alt: #1c222b;
+    --surface-hover: #21262e;
+    --paper: #161b22;
+    --border: #2a313c;
+    --border-light: #21262e;
+    --border-strong: #3a4250;
+    --text: #e6edf3;
+    --text-secondary: #b3c0cf;
+    --text-muted: #8b949e;
+    --text-light: #6e7681;
+    --accent: #58a6ff;
+    --accent-light: #1f2a3a;
+    --accent-hover: #79b8ff;
+    --accent-soft: #4f6680;
+    --rule: #58a6ff;
+    --positive: #56d364;
+    --positive-light: #133c1d;
+    --negative: #f85149;
+    --negative-light: #3a1212;
+    --warn: #d29922;
+    --warn-light: #3a2c0a;
+    --tag-bg: #21262e;
+    --tag-text: #b3c0cf;
+    --kr-up: #ff6b5e;
+    --kr-up-light: #3a1818;
+    --kr-down: #4d9eff;
+    --kr-down-light: #14233a;
+    --kr-flat: #8b949e;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.4);
+    --shadow-lg: 0 12px 28px rgba(0,0,0,0.5);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-alt: #1c222b;
+  --surface-hover: #21262e;
+  --paper: #161b22;
+  --border: #2a313c;
+  --border-light: #21262e;
+  --border-strong: #3a4250;
+  --text: #e6edf3;
+  --text-secondary: #b3c0cf;
+  --text-muted: #8b949e;
+  --text-light: #6e7681;
+  --accent: #58a6ff;
+  --accent-light: #1f2a3a;
+  --accent-hover: #79b8ff;
+  --accent-soft: #4f6680;
+  --rule: #58a6ff;
+  --positive: #56d364;
+  --positive-light: #133c1d;
+  --negative: #f85149;
+  --negative-light: #3a1212;
+  --warn: #d29922;
+  --warn-light: #3a2c0a;
+  --tag-bg: #21262e;
+  --tag-text: #b3c0cf;
+  --kr-up: #ff6b5e;
+  --kr-up-light: #3a1818;
+  --kr-down: #4d9eff;
+  --kr-down-light: #14233a;
+  --kr-flat: #8b949e;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 28px rgba(0,0,0,0.5);
+}
 html { scroll-behavior: smooth; }
 body {
   font-family: var(--sans);
@@ -89,11 +169,44 @@ body {
   padding-bottom: 80px;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: 'cv11','ss01','calt';
+  transition: background-color 200ms, color 200ms;
+}
+:root:not([data-theme="dark"]) body {
   background-image:
     linear-gradient(to bottom, transparent 0, transparent 24px, rgba(20,33,61,0.015) 24px, rgba(20,33,61,0.015) 25px, transparent 25px),
     linear-gradient(to right, transparent 0, transparent 240px, rgba(20,33,61,0.015) 240px, rgba(20,33,61,0.015) 241px, transparent 241px);
   background-size: 100% 25px, 240px 100%;
 }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) body {
+    background-image:
+      linear-gradient(to bottom, transparent 0, transparent 24px, rgba(20,33,61,0.015) 24px, rgba(20,33,61,0.015) 25px, transparent 25px),
+      linear-gradient(to right, transparent 0, transparent 240px, rgba(20,33,61,0.015) 240px, rgba(20,33,61,0.015) 241px, transparent 241px);
+    background-size: 100% 25px, 240px 100%;
+  }
+}
+
+/* 테마 토글 버튼 */
+.theme-toggle {
+  background: transparent; border: 1px solid var(--border);
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-secondary);
+  font-size: 14px; line-height: 1;
+  border-radius: var(--radius-sm);
+  transition: all 120ms;
+}
+.theme-toggle:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--accent);
+}
+.theme-toggle .sun { display: inline; }
+.theme-toggle .moon { display: none; }
+:root[data-theme="dark"] .theme-toggle .sun,
+:root[data-theme="dark"] .theme-toggle .moon { display: inline; }
+:root[data-theme="dark"] .theme-toggle .sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .moon { display: inline; }
 ::selection { background: var(--accent); color: #fff; }
 a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
 a:hover { color: var(--accent-hover); text-decoration: underline; text-underline-offset: 2px; }
@@ -633,6 +746,11 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
   padding: 0 16px;
   border-right: 1px solid var(--border-light);
   display: flex; flex-direction: column; gap: 6px;
+  transition: background 120ms;
+  border-radius: var(--radius-sm);
+}
+.macro-cell:hover {
+  background: var(--surface-hover);
 }
 .macro-cell:last-child { border-right: none; }
 .macro-cell:first-child { padding-left: 0; }
@@ -1053,6 +1171,28 @@ def _wrap_html(
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   <style>{_SHARED_CSS}</style>
+  <script>
+    // 테마 — localStorage > prefers-color-scheme 순. inline으로 첫 페인트 전 적용 (FOUC 방지).
+    (function(){{
+      try {{
+        var t = localStorage.getItem('ker-theme');
+        if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+      }} catch(e) {{}}
+    }})();
+    window.kerToggleTheme = function() {{
+      var cur = document.documentElement.getAttribute('data-theme');
+      var next;
+      if (cur === 'dark') next = 'light';
+      else if (cur === 'light') next = 'dark';
+      else {{
+        // 시스템 따라가는 상태에서 토글 → 시스템과 반대로
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        next = prefersDark ? 'light' : 'dark';
+      }}
+      document.documentElement.setAttribute('data-theme', next);
+      try {{ localStorage.setItem('ker-theme', next); }} catch(e) {{}}
+    }};
+  </script>
 </head>
 <body>
   <header class="site-header">
@@ -1064,6 +1204,9 @@ def _wrap_html(
       </a>
       <nav>
         <a href="/">soccz.github.io</a>
+        <button class="theme-toggle" onclick="window.kerToggleTheme()" aria-label="테마 변경" title="라이트/다크 모드">
+          <span class="sun">☀</span><span class="moon">☾</span>
+        </button>
       </nav>
     </div>
   </header>

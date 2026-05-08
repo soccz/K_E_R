@@ -227,7 +227,8 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         extraction = extract_from_filing_dir(dart_dir)
         if extraction.sections:
             # 섹션당 max 3000자로 제한 — 10개 섹션 합 ~30KB. claude CLI timeout 회피.
-            business_extraction = extraction.to_prompt_dict(max_chars_per_section=3000)
+            # 섹션당 max 2000자 (10개 섹션 합 ~20KB). claude CLI 600~1800s timeout 안전 마진.
+            business_extraction = extraction.to_prompt_dict(max_chars_per_section=2000)
             print(f"사업보고서 섹션 추출: {list(extraction.sections.keys())}")
     except Exception as e:
         print(f"[business_report] 추출 실패: {e}")
@@ -549,8 +550,13 @@ def main() -> int:
     )
     p_gen.add_argument("--period", required=True, help="폴더명 (예: 2025-annual)")
     p_gen.add_argument("--section", default="all")
-    p_gen.add_argument("--max-chars", type=int, default=300_000)
-    p_gen.add_argument("--max-total-chars", type=int, default=180_000, help="전체 DART 원문 텍스트 예산")
+    p_gen.add_argument("--max-chars", type=int, default=200_000, help="단일 DART 원문 파일 최대")
+    p_gen.add_argument(
+        "--max-total-chars",
+        type=int,
+        default=120_000,
+        help="전체 DART 원문 합산 예산. 200KB 초과 시 LLM timeout 위험 — 120KB로 절감.",
+    )
     p_gen.add_argument("--skip-fetch", action="store_true", help="이미 받은 데이터 재사용")
     p_gen.add_argument("--skip-owner-summary", action="store_true", help="합본의 owner-valuation 한 페이지 LLM 호출 skip")
     p_gen.add_argument("--allow-missing-xbrl", action="store_true", help="XBRL 없어도 생성 허용 (기본은 정기보고서에서 hard fail)")
