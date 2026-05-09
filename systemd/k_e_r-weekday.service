@@ -3,6 +3,7 @@ Description=K_E_R weekday report generation
 Documentation=https://github.com/soccz/K_E_R
 After=network-online.target
 Wants=network-online.target
+OnFailure=k_e_r-notify-failure@%n.service
 
 [Service]
 Type=oneshot

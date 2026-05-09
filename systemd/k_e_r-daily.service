@@ -3,6 +3,7 @@ Description=K_E_R daily note — 임계치 기반 외부 노출 트랙
 Documentation=https://github.com/soccz/K_E_R
 After=network-online.target k_e_r-daily-refresh.service
 Wants=network-online.target
+OnFailure=k_e_r-notify-failure@%n.service
 
 [Service]
 Type=oneshot

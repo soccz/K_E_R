@@ -1,4 +1,88 @@
-"""K_E_R 사이트 CSS — site_renderer.py에서 분리 (Phase G)."""
+"""K_E_R 사이트 CSS — site_renderer.py에서 분리 (Phase G).
+
+CRITICAL_CSS: above-the-fold (header·container·typography·테마 토큰).
+페이지마다 인라인 → FOUC 방지.
+
+SHARED_CSS: 전체 (CRITICAL_CSS 포함).
+외부 /assets/k-e-r.css로 비차단 로드 (preload + media trick).
+"""
+
+# Above-the-fold만 — 페이지마다 인라인 (~5KB).
+# FCP 직전에 적용되어 폰트·색·헤더가 깜빡이지 않음.
+CRITICAL_CSS = """
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --paper: #fcfcfd;
+  --border: #dde2ea; --border-strong: #b8c0cc;
+  --text: #0a0e1a; --text-secondary: #2c3445; --text-muted: #6b7387;
+  --accent: #14213d; --accent-hover: #0a1228;
+  --rule: #1a2238;
+  --max-w: 1280px;
+  --radius-sm: 3px;
+  --serif: 'Source Serif 4', 'IBM Plex Serif', Georgia, serif;
+  --sans: 'Inter', 'Noto Sans KR', -apple-system, sans-serif;
+  --display: 'IBM Plex Sans', 'Inter', sans-serif;
+  --mono: 'IBM Plex Mono', 'JetBrains Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117; --surface: #161b22; --paper: #161b22;
+    --border: #2a313c; --border-strong: #3a4250;
+    --text: #e6edf3; --text-secondary: #b3c0cf; --text-muted: #8b949e;
+    --accent: #58a6ff; --accent-hover: #79b8ff; --rule: #58a6ff;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117; --surface: #161b22; --paper: #161b22;
+  --border: #2a313c; --border-strong: #3a4250;
+  --text: #e6edf3; --text-secondary: #b3c0cf; --text-muted: #8b949e;
+  --accent: #58a6ff; --accent-hover: #79b8ff; --rule: #58a6ff;
+}
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--sans); background: var(--bg); color: var(--text);
+  line-height: 1.7; padding-bottom: 80px;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 200ms, color 200ms;
+}
+::selection { background: var(--accent); color: #fff; }
+a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
+a:hover { color: var(--accent-hover); text-decoration: underline; text-underline-offset: 2px; }
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  border-top: 3px solid var(--rule);
+  position: sticky; top: 0; z-index: 100;
+}
+.site-header .inner {
+  max-width: var(--max-w); margin: 0 auto;
+  padding: 16px 32px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.site-header .brand {
+  font-family: var(--display); font-weight: 700; font-size: 17px;
+  letter-spacing: -0.02em;
+  display: flex; align-items: center; gap: 12px; color: var(--text);
+}
+.site-header .brand .divider { width: 1px; height: 18px; background: var(--border-strong); }
+.site-header .brand .badge {
+  background: transparent; color: var(--text-muted);
+  font-size: 11px; font-weight: 500; letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.site-header nav a {
+  color: var(--text-secondary); margin-left: 22px;
+  font-size: 13px; font-weight: 500;
+}
+.theme-toggle {
+  background: transparent; border: 1px solid var(--border);
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-secondary);
+  font-size: 14px; line-height: 1; border-radius: var(--radius-sm);
+}
+.container { max-width: var(--max-w); margin: 0 auto; padding: 36px 32px; }
+"""
 
 SHARED_CSS = """
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -874,6 +958,15 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
 .watchlist-table th.spark { width: 90px; text-align: left; }
 .watchlist-table th.change { width: 70px; text-align: right; }
 .watchlist-table th.mcap { width: 200px; text-align: right; }
+.watchlist-table th.sortable {
+  cursor: pointer; user-select: none;
+  transition: color 120ms;
+}
+.watchlist-table th.sortable:hover { color: var(--accent); }
+.watchlist-table th .sort-arrow {
+  font-size: 10px; color: var(--accent);
+  display: inline-block; min-width: 12px;
+}
 
 tr.stock-row td.spark { padding: 0 12px; vertical-align: middle; }
 tr.stock-row td.spark svg {

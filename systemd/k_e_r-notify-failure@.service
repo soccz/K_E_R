@@ -1,0 +1,9 @@
+[Unit]
+Description=K_E_R 실패 알림 핸들러 (%i 실패 시 ntfy 푸시)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/soccz/22tb/report
+EnvironmentFile=/home/soccz/22tb/report/.env
+ExecStart=/home/soccz/22tb/report/bin/notify_failure.sh %i
+TimeoutStartSec=60

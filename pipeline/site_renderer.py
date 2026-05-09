@@ -40,6 +40,7 @@ class ReportEntry:
 
 import hashlib
 
+from pipeline.site_styles import CRITICAL_CSS as _CRITICAL_CSS
 from pipeline.site_styles import SHARED_CSS as _SHARED_CSS
 
 
@@ -93,7 +94,9 @@ def _wrap_html(
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{_CSS_HREF}">
+  <style>{_CRITICAL_CSS}</style>
+  <link rel="preload" href="{_CSS_HREF}" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="{_CSS_HREF}"></noscript>
   <script>
     // 테마 — localStorage > prefers-color-scheme 순. inline으로 첫 페인트 전 적용 (FOUC 방지).
     (function(){{
@@ -669,7 +672,7 @@ def render_master_index(
 
     def _change_cell(d: dict | None) -> str:
         if not d or d.get("close_60d_pct_change") is None:
-            return '<td class="change">—</td>'
+            return '<td class="change" data-sort-value="">—</td>'
         pct = d["close_60d_pct_change"]
         if pct > 0.5:
             cls, sign = "change-up", "+"
@@ -677,15 +680,15 @@ def render_master_index(
             cls, sign = "change-down", ""
         else:
             cls, sign = "change-flat", ""
-        return f'<td class="change {cls}">{sign}{pct:.1f}%</td>'
+        return f'<td class="change {cls}" data-sort-value="{pct}">{sign}{pct:.1f}%</td>'
 
     def _market_cap_cell(d: dict | None) -> str:
         if not d or not d.get("market_cap_trillion_krw"):
-            return '<td class="mcap">—</td>'
+            return '<td class="mcap" data-sort-value="">—</td>'
         mc = d["market_cap_trillion_krw"]
         bar_pct = min(mc / max_market_cap * 100, 100)
         return (
-            f'<td class="mcap">'
+            f'<td class="mcap" data-sort-value="{mc}">'
             f'<span class="mcap-val">{mc:,.0f}조</span>'
             f'<span class="mcap-bar"><span class="mcap-fill" style="width:{bar_pct:.1f}%"></span></span>'
             f'</td>'
@@ -715,27 +718,28 @@ def render_master_index(
                 report_label = f"{report_count}건" if report_count > 1 else "1건"
                 rows_html.append(
                     f'<tr class="stock-row stock-active" data-sector="{escape(sector)}" '
-                    f'onclick="location.href=\'{escape(href)}\'">'
+                    f'data-active="1" onclick="location.href=\'{escape(href)}\'">'
                     f'<td class="status"><span class="dot dot-active"></span></td>'
-                    f'<td class="name"><strong>{escape(w.name)}</strong>'
+                    f'<td class="name" data-sort-value="{escape(w.name)}"><strong>{escape(w.name)}</strong>'
                     f'<span class="ticker">{escape(w.ticker) if w.ticker else ""}</span></td>'
                     f'{spark_cell}'
                     f'{change_cell}'
                     f'{mcap_cell}'
-                    f'<td class="latest">{escape(friendly)} · {escape(latest.written_at)}</td>'
+                    f'<td class="latest" data-sort-value="{escape(latest.written_at)}">'
+                    f'{escape(friendly)} · {escape(latest.written_at)}</td>'
                     f'<td class="action">{report_label} →</td>'
                     f'</tr>'
                 )
             else:
                 rows_html.append(
-                    f'<tr class="stock-row stock-empty" data-sector="{escape(sector)}">'
+                    f'<tr class="stock-row stock-empty" data-sector="{escape(sector)}" data-active="0">'
                     f'<td class="status"><span class="dot dot-empty"></span></td>'
-                    f'<td class="name">{escape(w.name)}'
+                    f'<td class="name" data-sort-value="{escape(w.name)}">{escape(w.name)}'
                     f'<span class="ticker">{escape(w.ticker) if w.ticker else ""}</span></td>'
                     f'{spark_cell}'
                     f'{change_cell}'
                     f'{mcap_cell}'
-                    f'<td class="latest"><em class="empty-text">추적 중</em></td>'
+                    f'<td class="latest" data-sort-value=""><em class="empty-text">추적 중</em></td>'
                     f'<td class="action">대기</td>'
                     f'</tr>'
                 )
@@ -769,11 +773,11 @@ def render_master_index(
   <thead>
     <tr>
       <th class="status">●</th>
-      <th class="name">종목</th>
+      <th class="name sortable" data-sort-key="name" data-sort-type="string">종목 <span class="sort-arrow"></span></th>
       <th class="spark">60d 추세</th>
-      <th class="change">변화</th>
-      <th class="mcap">시가총액</th>
-      <th class="latest">최신 보고서</th>
+      <th class="change sortable" data-sort-key="change" data-sort-type="number">변화 <span class="sort-arrow"></span></th>
+      <th class="mcap sortable" data-sort-key="mcap" data-sort-type="number">시가총액 <span class="sort-arrow"></span></th>
+      <th class="latest sortable" data-sort-key="latest" data-sort-type="string">최신 보고서 <span class="sort-arrow"></span></th>
       <th class="action"></th>
     </tr>
   </thead>
@@ -788,10 +792,72 @@ def render_master_index(
     document.querySelectorAll('.filter-pill').forEach(function(b) {{
       b.classList.toggle('active', b.dataset.sector === sector);
     }});
+    // 섹터 필터 → 정렬 해제 (섹터 그룹 복원)
+    var tbody = document.querySelector('#watchlistTable tbody');
+    if (tbody && tbody.dataset.sortedBy) {{
+      delete tbody.dataset.sortedBy;
+      delete tbody.dataset.sortDir;
+      window.kerRestoreOrder();
+    }}
+    document.querySelectorAll('.sortable .sort-arrow').forEach(function(a) {{ a.textContent = ''; }});
     document.querySelectorAll('#watchlistTable tr[data-sector]').forEach(function(tr) {{
       tr.style.display = (sector === 'all' || tr.dataset.sector === sector) ? '' : 'none';
     }});
   }};
+
+  // 정렬 — header 클릭 시 flat sort, 섹터 헤더 행 숨김.
+  window.kerSort = function(key, type) {{
+    var tbody = document.querySelector('#watchlistTable tbody');
+    if (!tbody) return;
+    var dir = (tbody.dataset.sortedBy === key && tbody.dataset.sortDir === 'desc') ? 'asc' : 'desc';
+    tbody.dataset.sortedBy = key;
+    tbody.dataset.sortDir = dir;
+
+    var rows = Array.from(tbody.querySelectorAll('tr.stock-row'));
+    rows.sort(function(a, b) {{
+      var ca = a.querySelector('td.' + key);
+      var cb = b.querySelector('td.' + key);
+      var va = ca ? (ca.dataset.sortValue || '') : '';
+      var vb = cb ? (cb.dataset.sortValue || '') : '';
+      // 빈 값은 항상 마지막
+      if (va === '' && vb === '') return 0;
+      if (va === '') return 1;
+      if (vb === '') return -1;
+      if (type === 'number') {{
+        var na = parseFloat(va);
+        var nb = parseFloat(vb);
+        return dir === 'desc' ? nb - na : na - nb;
+      }}
+      return dir === 'desc' ? vb.localeCompare(va) : va.localeCompare(vb);
+    }});
+    // 섹터 헤더 숨기고, 정렬된 행만 순서대로
+    tbody.querySelectorAll('tr.sector-header').forEach(function(tr) {{ tr.style.display = 'none'; }});
+    rows.forEach(function(tr) {{ tbody.appendChild(tr); tr.style.display = ''; }});
+
+    // 화살표 표시
+    document.querySelectorAll('.sortable .sort-arrow').forEach(function(a) {{ a.textContent = ''; }});
+    var th = document.querySelector('th.sortable[data-sort-key="' + key + '"] .sort-arrow');
+    if (th) th.textContent = dir === 'desc' ? ' ▼' : ' ▲';
+  }};
+
+  // 섹터 필터 시 원래 순서로 복원
+  window.kerRestoreOrder = function() {{
+    var tbody = document.querySelector('#watchlistTable tbody');
+    if (!tbody || !window._kerOrigOrder) return;
+    window._kerOrigOrder.forEach(function(tr) {{ tbody.appendChild(tr); }});
+    tbody.querySelectorAll('tr.sector-header').forEach(function(tr) {{ tr.style.display = ''; }});
+  }};
+
+  document.addEventListener('DOMContentLoaded', function() {{
+    var tbody = document.querySelector('#watchlistTable tbody');
+    if (tbody) window._kerOrigOrder = Array.from(tbody.children);
+    document.querySelectorAll('th.sortable').forEach(function(th) {{
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', function() {{
+        window.kerSort(th.dataset.sortKey, th.dataset.sortType);
+      }});
+    }});
+  }});
 </script>"""
 
     title = "K_E_R — Korea Equity Reports"
