@@ -42,6 +42,7 @@ class SectionResult:
     v2_validation: validator.ValidationResult | None  # None if no source_pack
     v4_violations: list[ConsistencyViolation]  # cross-section consistency
     attempts: int
+    best_effort: bool = False  # True면 retry 한도 초과 후 last attempt 채택
 
     @property
     def passed(self) -> bool:
@@ -211,7 +212,18 @@ def generate_section_with_validation(
                 attempts=attempt,
             )
 
+    # 모든 retry 소진 — best-effort: 마지막 attempt를 final로 채택.
+    # 페르소나 정직 원칙: validator warning은 .v_warnings.md로 별도 기록 → 사용자 review.
+    # 무한 retry loop 방지 (한 ticker 막혀서 다른 종목 못 가는 문제 해결).
     assert last_v1 is not None and last_v3 is not None
-    raise SectionBuildError(
-        section_id, last_v1, last_v3, last_v2, last_v4, raw_outputs=raw_outputs
+    return SectionResult(
+        section_id=section_id,
+        raw_outputs=raw_outputs,
+        final_text=text,  # 마지막 attempt
+        v1_validation=last_v1,
+        v3_validation=last_v3,
+        v2_validation=last_v2,
+        v4_violations=last_v4,
+        attempts=max_retries + 1,
+        best_effort=True,
     )

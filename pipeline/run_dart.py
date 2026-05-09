@@ -36,7 +36,7 @@ from pipeline.local_data_loader import load_local_dart_data
 from pipeline.macro_data import load_macro_snapshot
 from pipeline.prompt_builder import SECTION_SPECS, DataTimestamps
 from pipeline.quarterly_disclosure import load_quarterly_disclosures
-from pipeline import report_quality
+from pipeline import cross_section_consistency, report_quality
 from pipeline.report_assembler import assemble_report
 from pipeline.section_builder import (
     SectionBuildError,
@@ -424,7 +424,8 @@ def _cmd_generate(args: argparse.Namespace) -> int:
             failed_any = True
             continue
 
-        if result.v2_validation:
+        # best_effort 섹션은 V2 scale guard 우회 (이미 retry 한도 초과)
+        if result.v2_validation and not result.best_effort:
             scale_warnings = [
                 w for w in result.v2_validation.warnings
                 if w.category == "numeric_scale_mismatch"
@@ -438,7 +439,28 @@ def _cmd_generate(args: argparse.Namespace) -> int:
                 failed_any = True
                 continue
 
-        print(f"  PASSED in {result.attempts} attempt(s)")
+        if result.best_effort:
+            print(f"  ⚠ BEST-EFFORT (validator {result.attempts}회 모두 reject — last attempt 채택)")
+            # validator warnings를 별도 파일로 사용자 review용 저장
+            v_warnings_lines = ["# Validator Warnings — best-effort fallback\n"]
+            v_warnings_lines.append(f"이 섹션은 V1~V4 검증 {result.attempts}회 모두 실패. ")
+            v_warnings_lines.append("무한 retry 방지를 위해 마지막 attempt를 채택. 수동 review 권장.\n\n")
+            if not result.v1_validation.passed:
+                v_warnings_lines.append(f"## V1 (출처/형식)\n{result.v1_validation.render()}\n\n")
+            if not result.v3_validation.passed:
+                v_warnings_lines.append(f"## V3 (산술)\n{result.v3_validation.render()}\n\n")
+            if result.v2_validation and not result.v2_validation.passed:
+                v_warnings_lines.append(f"## V2 (자릿수)\n{result.v2_validation.render()}\n\n")
+            if result.v4_violations:
+                v_warnings_lines.append(
+                    f"## V4 (cross-section)\n{cross_section_consistency.render_violations(result.v4_violations)}\n\n"
+                )
+            (report_dir / f"{sec}.v_warnings.md").write_text(
+                "".join(v_warnings_lines), encoding="utf-8"
+            )
+        else:
+            print(f"  PASSED in {result.attempts} attempt(s)")
+
         for i, raw in enumerate(result.raw_outputs, 1):
             snapshot.save_section_raw(report_dir, f"{sec}.attempt-{i}", raw)
         snapshot.save_section_final(report_dir, sec, result.final_text)
