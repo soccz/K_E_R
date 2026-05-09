@@ -967,6 +967,55 @@ tr.stock-row td.foreign {
 tr.stock-row td.foreign-buy { color: var(--kr-up); }
 tr.stock-row td.foreign-sell { color: var(--kr-down); }
 tr.stock-row td.foreign-flat { color: var(--kr-flat); opacity: 0.6; }
+
+/* 회사 페이지 외인 보유율 30일 차트 (페르소나 §1.7) */
+.foreign-holding-chart {
+  margin-top: 20px; padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-width: 320px;
+}
+.fhc-header {
+  display: flex; align-items: baseline; gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.fhc-label {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.fhc-value {
+  font-family: var(--mono); font-size: 18px;
+  font-weight: 600; color: var(--text);
+  font-feature-settings: "tnum";
+}
+.fhc-change {
+  font-family: var(--mono); font-size: 12px;
+  font-feature-settings: "tnum";
+  padding: 2px 6px; border-radius: 2px;
+}
+.fhc-change.fhc-up { color: var(--kr-up); background: var(--kr-up-light); }
+.fhc-change.fhc-down { color: var(--kr-down); background: var(--kr-down-light); }
+.fhc-change.fhc-flat { color: var(--kr-flat); background: transparent; }
+
+.fhc-svg {
+  width: 100%; height: 80px; display: block;
+}
+.fhc-svg.fhc-up polyline { stroke: var(--kr-up); }
+.fhc-svg.fhc-down polyline { stroke: var(--kr-down); }
+.fhc-svg.fhc-flat polyline { stroke: var(--kr-flat); }
+.fhc-svg.fhc-up .fhc-dot { fill: var(--kr-up); }
+.fhc-svg.fhc-down .fhc-dot { fill: var(--kr-down); }
+.fhc-svg.fhc-flat .fhc-dot { fill: var(--kr-flat); }
+
+.fhc-axis {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text-muted); margin-top: 6px;
+  letter-spacing: 0.04em;
+}
 .watchlist-table th.sortable {
   cursor: pointer; user-select: none;
   transition: color 120ms;

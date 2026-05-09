@@ -403,13 +403,111 @@ def render_report_to_html(
     )
 
 
+def _render_foreign_holding_chart(ticker: str, company: str = "") -> str:
+    """KRX 외인 보유 비중 30일 추이 SVG 차트.
+
+    1순위: pipeline/cache/foreign_holdings_<ticker>.json
+    2순위: 캐시 miss 시 _fetch_krx_foreign_holdings 직접 호출 (~3초)
+    데이터 없으면 빈 문자열.
+    """
+    if not ticker:
+        return ""
+    cache_path = Path("pipeline/cache") / f"foreign_holdings_{ticker}.json"
+    history: list[dict] = []
+    latest_pct: float | None = None
+    change_5d: float | None = None
+    if cache_path.exists():
+        try:
+            import json as _json
+            data = _json.loads(cache_path.read_text(encoding="utf-8"))
+            history = data.get("krx_daily_foreign_history") or []
+            latest_pct = data.get("krx_daily_foreign_pct")
+            change_5d = data.get("krx_foreign_pct_change_5d")
+        except Exception:
+            pass
+
+    # cache miss 또는 history 없으면 직접 fetch
+    if not history:
+        try:
+            from pipeline.foreign_holdings import _fetch_krx_foreign_holdings
+            history = _fetch_krx_foreign_holdings(ticker, days=30)
+            if history:
+                latest_pct = history[0]["holding_pct"]
+                if len(history) >= 6:
+                    change_5d = round(history[0]["holding_pct"] - history[5]["holding_pct"], 3)
+        except Exception:
+            return ""
+    if not history or latest_pct is None:
+        return ""
+
+    # SVG line — 시간순(과거→최신) 좌→우
+    points_data = sorted(history, key=lambda d: d["date"])
+    if len(points_data) < 2:
+        return ""
+    pcts = [p["holding_pct"] for p in points_data]
+    mn, mx = min(pcts), max(pcts)
+    rng = mx - mn if mx > mn else 0.5  # 최소 0.5%p 범위로 단조선 방지
+    n = len(pcts)
+    W, H = 280, 80
+    # 위/아래 padding 8px (label 자리)
+    pad_top, pad_bot = 12, 12
+    inner_h = H - pad_top - pad_bot
+    pts = " ".join(
+        f"{i / (n - 1) * W:.1f},{pad_top + (mx - p) / rng * inner_h:.1f}"
+        for i, p in enumerate(pcts)
+    )
+
+    # 색상: 5d 변동 부호 (KRX 한국식)
+    if change_5d is None:
+        color_cls = "fhc-flat"
+    elif change_5d > 0.05:
+        color_cls = "fhc-up"
+    elif change_5d < -0.05:
+        color_cls = "fhc-down"
+    else:
+        color_cls = "fhc-flat"
+
+    # 변동 표시
+    if change_5d is None:
+        change_str = ""
+    else:
+        sign = "+" if change_5d > 0 else ""
+        change_str = f'<span class="fhc-change {color_cls}">{sign}{change_5d:.2f}pp 5d</span>'
+
+    # 시작일·종료일
+    first_date = points_data[0]["date"]
+    last_date = points_data[-1]["date"]
+
+    return f"""
+<div class="foreign-holding-chart">
+  <div class="fhc-header">
+    <span class="fhc-label">외인 보유 비중 (KRX 30일)</span>
+    <span class="fhc-value">{latest_pct:.2f}%</span>
+    {change_str}
+  </div>
+  <svg viewBox="0 0 {W} {H}" class="fhc-svg {color_cls}" preserveAspectRatio="none">
+    <polyline points="{pts}" fill="none" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+    <circle cx="{(n-1) / (n-1) * W:.1f}" cy="{pad_top + (mx - pcts[-1]) / rng * inner_h:.1f}" r="2.5" class="fhc-dot"/>
+  </svg>
+  <div class="fhc-axis">
+    <span>{first_date}</span>
+    <span>{mn:.2f}% – {mx:.2f}%</span>
+    <span>{last_date}</span>
+  </div>
+</div>"""
+
+
 def render_company_index(
     company: str,
     company_dir: Path,
     out_html_path: Path,
     entries: list[ReportEntry],
+    ticker: str = "",
 ) -> None:
-    """회사별 보고서 목록 — 정렬 토글(최신순/과거순) 포함."""
+    """회사별 보고서 목록 — 정렬 토글(최신순/과거순) 포함.
+
+    ticker 제공 시 외인 보유 비중 30일 추이 SVG 차트 노출 (페르소나 §1.7).
+    """
     sorted_entries = sorted(entries, key=lambda x: x.period, reverse=True)
     cards: list[str] = []
     for idx, e in enumerate(sorted_entries):
@@ -433,11 +531,14 @@ def render_company_index(
 </a>"""
         )
 
+    foreign_chart_html = _render_foreign_holding_chart(ticker)
+
     body = f"""
 <div class="page-hero">
   <span class="doc-tag">Issuer Coverage</span>
   <h1>{escape(company)}</h1>
   <p class="subtitle">분기·연간 종합 진단 — 누적 {len(entries)}건</p>
+  {foreign_chart_html}
 </div>
 
 <div class="list-controls">
@@ -992,6 +1093,13 @@ def render_all(
     discovered = discover_reports(companies_dir)
     site_root.mkdir(parents=True, exist_ok=True)
 
+    # 워치리스트 먼저 — 회사별 ticker 매핑(외인 보유율 차트용)
+    watchlist: list[WatchlistEntry] | None = None
+    company_to_ticker: dict[str, str] = {}
+    if watchlist_path and watchlist_path.exists():
+        watchlist = parse_watchlist(watchlist_path.read_text(encoding="utf-8"))
+        company_to_ticker = {w.name: w.ticker for w in watchlist if w.ticker}
+
     total_reports = 0
     rendered = 0
     for company, entries in discovered.items():
@@ -1011,11 +1119,10 @@ def render_all(
             rendered += 1
         # 회사 인덱스는 항상 다시 (정렬·count 변경 가능)
         company_index = company_html_dir / "index.html"
-        render_company_index(company, company_html_dir, company_index, entries)
-
-    watchlist: list[WatchlistEntry] | None = None
-    if watchlist_path and watchlist_path.exists():
-        watchlist = parse_watchlist(watchlist_path.read_text(encoding="utf-8"))
+        render_company_index(
+            company, company_html_dir, company_index, entries,
+            ticker=company_to_ticker.get(company, ""),
+        )
 
     # 일간 메모 렌더 (옵션)
     daily_count = 0
