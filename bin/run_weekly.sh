@@ -10,7 +10,7 @@
 # Override (수동 디버그):
 #   WEEKDAY_TICKER=005930 WEEKDAY_PERIOD=2025-annual bin/run_weekly.sh
 
-set -euo pipefail
+set -uo pipefail  # -e 제거 — health 기록 위해 trap 필요
 
 # systemd user 환경에서 claude CLI(~/.local/bin/claude) 접근 가능하도록 PATH 보강.
 # 대화형 셸 PATH와 systemd PATH가 다름 (.bashrc 안 읽힘).
@@ -18,6 +18,17 @@ export PATH="$HOME/.local/bin:$HOME/.local/share/claude/versions:$PATH"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+export REPO_ROOT
+source "$REPO_ROOT/bin/lib_health.sh"
+
+# 시작 시: 디스크 체크 + 로그 retention
+log_retention_cleanup
+check_disk_space "$REPO_ROOT" || true
+
+# 종료 시 health 기록 (성공/실패 모두 캡처)
+HEALTH_STATUS="ok"
+HEALTH_DETAIL="{}"
+trap 'write_health "weekday" "$HEALTH_STATUS" "$HEALTH_DETAIL"' EXIT
 
 PYTHON="$REPO_ROOT/.venv/bin/python"
 LOG_TS=$(date '+%Y-%m-%d %H:%M:%S %Z')
@@ -65,11 +76,17 @@ fi
 
 echo "ticker=$TICKER bsns_year=$BSNS_YEAR reprt_code=$REPRT_CODE period=$PERIOD"
 
-"$PYTHON" -m pipeline.run_dart generate \
+if "$PYTHON" -m pipeline.run_dart generate \
   --ticker "$TICKER" \
   --bsns-year "$BSNS_YEAR" \
   --reprt-code "$REPRT_CODE" \
-  --period "$PERIOD"
+  --period "$PERIOD"; then
+  HEALTH_DETAIL="{\"ticker\": \"$TICKER\", \"period\": \"$PERIOD\"}"
+else
+  RC=$?
+  HEALTH_STATUS="fail"
+  HEALTH_DETAIL="{\"ticker\": \"$TICKER\", \"period\": \"$PERIOD\", \"rc\": $RC}"
+fi
 
 # GitHub auto-push — 기본 ON. 끄려면 GIT_AUTO_PUSH=0 환경변수.
 if [ "${GIT_AUTO_PUSH:-1}" = "1" ]; then

@@ -4,13 +4,21 @@
 # 호출 시점: K_E_R run 완료 직후 (run_weekly.sh 마지막 단계)
 # 또는 수동: bin/publish_site.sh
 
-set -euo pipefail
+set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SITE_ROOT="/home/soccz/22tb/soccz.github.io"
 SITE_KER_DIR="$SITE_ROOT/projects/k-e-r"
 
 cd "$REPO_ROOT"
+export REPO_ROOT
+source "$REPO_ROOT/bin/lib_health.sh"
+
+check_disk_space "$REPO_ROOT" || true
+
+HEALTH_STATUS="ok"
+HEALTH_DETAIL='{}'
+trap 'write_health "publish_site" "$HEALTH_STATUS" "$HEALTH_DETAIL"' EXIT
 
 if [ ! -d "$SITE_ROOT" ]; then
   echo "[publish] $SITE_ROOT 없음 — skip"

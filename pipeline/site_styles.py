@@ -1017,6 +1017,43 @@ tr.stock-row td.foreign-flat { color: var(--kr-flat); opacity: 0.6; }
   letter-spacing: 0.04em;
 }
 
+/* /status/ 페이지 — 자동 실행 health */
+.status-table {
+  width: 100%; border-collapse: collapse;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+.status-table thead { background: var(--surface-alt); }
+.status-table th {
+  text-align: left; padding: 10px 14px;
+  font-size: 11px; font-family: var(--mono);
+  font-weight: 600; letter-spacing: 0.05em;
+  color: var(--text-muted); text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.status-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: top;
+}
+.status-table td a {
+  color: var(--accent); text-decoration: none;
+}
+.status-table .status-cell {
+  font-family: var(--mono); font-size: 12px;
+  white-space: nowrap;
+}
+.status-table .status-detail {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text-muted);
+}
+.stat-ok { color: var(--positive); font-size: 14px; }
+.stat-fail { color: var(--negative); font-size: 14px; }
+.stat-skip { color: var(--text-muted); font-size: 14px; }
+.stat-flat { color: var(--text-muted); font-size: 14px; }
+
 /* 보고서 미발행 회사 페이지 placeholder */
 .empty-coverage {
   max-width: 720px; margin: 32px auto 60px;

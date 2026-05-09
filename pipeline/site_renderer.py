@@ -1170,10 +1170,126 @@ def render_all(
     master = site_root / "index.html"
     render_master_index(master, discovered, watchlist=watchlist, daily_count=daily_count)
 
+    # 상태 페이지 (/status/) — 자동 실행 health 노출
+    render_status_page(site_root)
+
     # 외부 CSS + sitemap + robots
     _write_static_assets(site_root)
 
     return len(discovered), total_reports, rendered
+
+
+def render_status_page(site_root: Path) -> None:
+    """/status/ — systemd timer 최근 실행 결과 + best-effort 섹션 list.
+
+    데이터 소스:
+      - logs/health/*.json (lib_health.sh write_health 출력)
+      - companies/*/*/sections_final/*.v_warnings.md (best-effort 섹션)
+    """
+    import json as _json
+
+    health_dir = Path("/home/soccz/22tb/report/logs/health")
+    timers_data: list[dict] = []
+    if health_dir.exists():
+        for hf in sorted(health_dir.glob("*.json")):
+            try:
+                d = _json.loads(hf.read_text(encoding="utf-8"))
+                timers_data.append(d)
+            except Exception:
+                continue
+
+    # best-effort 섹션 검색
+    best_effort_sections: list[dict] = []
+    companies_dir = Path("/home/soccz/22tb/report/companies")
+    if companies_dir.exists():
+        for vw in sorted(companies_dir.rglob("*.v_warnings.md")):
+            try:
+                rel = vw.relative_to(companies_dir)
+                parts = rel.parts  # (회사, period, <섹션>.v_warnings.md)
+                company = parts[0] if len(parts) > 0 else "?"
+                period = parts[1] if len(parts) > 1 else "?"
+                section_id = parts[-1].replace(".v_warnings.md", "")
+                mtime = datetime.fromtimestamp(vw.stat().st_mtime).strftime("%Y-%m-%d")
+                best_effort_sections.append({
+                    "company": company,
+                    "period": period,
+                    "section": section_id,
+                    "date": mtime,
+                })
+            except Exception:
+                continue
+
+    # render
+    timer_rows = []
+    for t in timers_data:
+        status = t.get("status", "?")
+        cls = {"ok": "stat-ok", "fail": "stat-fail", "skip": "stat-skip"}.get(status, "stat-flat")
+        last = t.get("last_run", "?")
+        timer_name = t.get("timer", "?")
+        details = t.get("details", {})
+        details_str = ", ".join(f"{k}={v}" for k, v in details.items()) if isinstance(details, dict) else ""
+        timer_rows.append(
+            f'<tr><td class="status-cell"><span class="{cls}">●</span> {escape(status)}</td>'
+            f'<td>{escape(timer_name)}</td>'
+            f'<td><code>{escape(last)}</code></td>'
+            f'<td class="status-detail">{escape(details_str)}</td></tr>'
+        )
+
+    if not timer_rows:
+        timer_rows.append('<tr><td colspan="4">실행 기록 없음 (첫 timer 발화 전)</td></tr>')
+
+    be_rows = []
+    for s in best_effort_sections[:30]:
+        company_url = escape(s["company"])
+        be_rows.append(
+            f'<tr>'
+            f'<td><a href="../{company_url}/{escape(s["period"])}/">{escape(s["company"])}</a></td>'
+            f'<td>{escape(s["period"])}</td>'
+            f'<td>{escape(s["section"])}</td>'
+            f'<td>{escape(s["date"])}</td></tr>'
+        )
+    if not be_rows:
+        be_rows.append('<tr><td colspan="4">best-effort 섹션 0건 — 모두 V1~V4 통과 ✓</td></tr>')
+
+    body = f"""
+<div class="page-hero">
+  <span class="doc-tag">System Health</span>
+  <h1>Status</h1>
+  <p class="subtitle">자동 실행 결과 + validator 부분 통과 섹션 추적.</p>
+</div>
+
+<div class="container" style="margin-top:32px">
+  <h2 style="font-size:14px; font-family:var(--mono); text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:14px;">최근 자동 실행</h2>
+  <table class="status-table">
+    <thead><tr><th>상태</th><th>Timer</th><th>마지막 실행</th><th>상세</th></tr></thead>
+    <tbody>{''.join(timer_rows)}</tbody>
+  </table>
+
+  <h2 style="font-size:14px; font-family:var(--mono); text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin:40px 0 14px;">Best-effort 섹션 (수동 review 권장)</h2>
+  <p style="font-size:13px; color:var(--text-secondary); margin-bottom:14px;">
+    V1~V4 validator가 4번 모두 reject한 섹션. 무한 retry 방지를 위해 last attempt 채택. 실제 보고서에 들어갔지만 출처·자릿수·cross-section 검증 부분 통과.
+  </p>
+  <table class="status-table">
+    <thead><tr><th>회사</th><th>Period</th><th>Section</th><th>날짜</th></tr></thead>
+    <tbody>{''.join(be_rows)}</tbody>
+  </table>
+</div>"""
+
+    breadcrumb = """
+<div class="container" style="padding-top:24px; padding-bottom:0; font-size:12px; color:var(--text-muted); letter-spacing:0.04em;">
+  <a href="../" style="color:var(--text-muted)">K_E_R</a>
+  &nbsp;/&nbsp;
+  <span style="color:var(--text-secondary)">Status</span>
+</div>"""
+
+    title = "Status — K_E_R"
+    description = "K_E_R 자동 실행 health + best-effort 섹션 추적."
+    out = site_root / "status" / "index.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        _wrap_html(title, body, breadcrumb=breadcrumb, description=description, canonical_path="status/", og_type="website"),
+        encoding="utf-8",
+    )
 
 
 def _write_static_assets(site_root: Path) -> None:

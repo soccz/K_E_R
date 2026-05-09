@@ -11,13 +11,22 @@
 # 수동 실행: bin/run_daily.sh
 # Dry-run (트리거 검사만): bin/run_daily.sh --check
 
-set -euo pipefail
+set -uo pipefail  # -e 제거 — health 기록 위해 trap 필요
 
 # systemd user 환경에서 claude CLI(~/.local/bin/claude) 접근.
 export PATH="$HOME/.local/bin:$HOME/.local/share/claude/versions:$PATH"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+export REPO_ROOT
+source "$REPO_ROOT/bin/lib_health.sh"
+
+log_retention_cleanup
+check_disk_space "$REPO_ROOT" || true
+
+HEALTH_STATUS="ok"
+HEALTH_DETAIL='{"trigger_hits": 0}'
+trap 'write_health "daily" "$HEALTH_STATUS" "$HEALTH_DETAIL"' EXIT
 
 PYTHON="$REPO_ROOT/.venv/bin/python"
 LOG_TS=$(date '+%Y-%m-%d %H:%M:%S %Z')
@@ -72,6 +81,8 @@ print('1' if d.get('should_publish') else '0')
 
 if [ "$SHOULD_PUBLISH" = "0" ]; then
   echo "[daily] 트리거 0건 — 일간 메모 미발행 (페르소나 정직 처리)"
+  HEALTH_STATUS="skip"
+  HEALTH_DETAIL='{"reason": "no_trigger"}'
   exit 0
 fi
 

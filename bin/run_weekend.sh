@@ -9,13 +9,22 @@
 #
 # 트리거 0건 (모든 섹터 단일 종목 등) 시 폴백: 평일판 (run_weekly.sh).
 
-set -euo pipefail
+set -uo pipefail
 
 # systemd user 환경에서 claude CLI(~/.local/bin/claude) 접근.
 export PATH="$HOME/.local/bin:$HOME/.local/share/claude/versions:$PATH"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+export REPO_ROOT
+source "$REPO_ROOT/bin/lib_health.sh"
+
+log_retention_cleanup
+check_disk_space "$REPO_ROOT" || true
+
+HEALTH_STATUS="ok"
+HEALTH_DETAIL='{}'
+trap 'write_health "weekend" "$HEALTH_STATUS" "$HEALTH_DETAIL"' EXIT
 
 PYTHON="$REPO_ROOT/.venv/bin/python"
 LOG_TS=$(date '+%Y-%m-%d %H:%M:%S %Z')

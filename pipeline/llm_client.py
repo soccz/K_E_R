@@ -25,8 +25,10 @@ class _ClaudeCodeBackend:
         self._cwd = config.CLAUDE_CODE_NEUTRAL_CWD
 
     def generate(self, system: str, user: str, max_tokens: int) -> str:
-        # 임시 파일은 user-only readable (0o600). NamedTemporaryFile 기본도 600이지만 명시.
+        # rate limit / transient 오류 시 exponential backoff (max 3회)
         import os
+        import time
+
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".md", delete=False, encoding="utf-8"
         ) as f:
@@ -50,27 +52,45 @@ class _ClaudeCodeBackend:
                 "--exclude-dynamic-system-prompt-sections",
                 "--permission-mode", "default",
             ]
-            try:
-                result = subprocess.run(
-                    args,
-                    input=user,
-                    capture_output=True,
-                    text=True,
-                    timeout=self._timeout,
-                    cwd=self._cwd,
-                    check=False,
-                )
-            except subprocess.TimeoutExpired as e:
-                raise RuntimeError(
-                    f"claude CLI timeout ({self._timeout}s): {e}"
-                ) from e
+            backoff_delays = [0, 30, 90]  # 1차 즉시, 2차 30s, 3차 90s
+            last_error: Exception | None = None
+            for attempt_idx, delay in enumerate(backoff_delays, 1):
+                if delay > 0:
+                    time.sleep(delay)
+                try:
+                    result = subprocess.run(
+                        args,
+                        input=user,
+                        capture_output=True,
+                        text=True,
+                        timeout=self._timeout,
+                        cwd=self._cwd,
+                        check=False,
+                    )
+                except subprocess.TimeoutExpired as e:
+                    last_error = RuntimeError(f"claude CLI timeout ({self._timeout}s): {e}")
+                    # timeout은 네트워크/모델 부하 가능성 → 재시도
+                    continue
 
-            if result.returncode != 0:
+                if result.returncode == 0:
+                    return result.stdout
+
+                err_text = (result.stdout + result.stderr).lower()
+                # rate limit / 429 / overloaded 패턴이면 backoff 재시도
+                if any(p in err_text for p in ["rate limit", "429", "overloaded", "too many requests", "service unavailable", "503"]):
+                    last_error = RuntimeError(
+                        f"claude CLI rate-limit/overload (rc={result.returncode}, attempt {attempt_idx}/3)"
+                    )
+                    continue
+
+                # 그 외 오류는 즉시 raise (재시도 의미 없음)
                 raise RuntimeError(
                     f"claude CLI failed (rc={result.returncode}): "
                     f"stdout={result.stdout[:1000]} stderr={result.stderr[:1000]}"
                 )
-            return result.stdout
+
+            # 3회 모두 실패
+            raise last_error or RuntimeError("claude CLI 3회 backoff 후에도 실패")
         finally:
             sys_path.unlink(missing_ok=True)
 
