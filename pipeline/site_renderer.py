@@ -624,6 +624,7 @@ def render_master_index(
     # Compact dashboard 표
     # 24종목 ticker_market 캐시 읽기 (없으면 빈 dict)
     ticker_data: dict[str, dict] = {}
+    foreign_24h: dict[str, int] = {}  # ticker → 어제 외인 순매매 KRW
     cache_dir = Path("/home/soccz/22tb/report/pipeline/cache")
     if cache_dir.exists():
         import json as _json
@@ -636,6 +637,21 @@ def render_master_index(
                     ticker_data[w.ticker] = _json.loads(cache_path.read_text(encoding="utf-8"))
                 except Exception:
                     pass
+
+    # 외인 24h — 어제 종가 기준 외인 순매매 KRW (cache 6h 활용)
+    try:
+        from pipeline.foreign_flow import fetch_foreign_flow
+        for w in watchlist:
+            if not w.ticker:
+                continue
+            try:
+                flow = fetch_foreign_flow(w.ticker, days=1)
+                if flow:
+                    foreign_24h[w.ticker] = flow[0].foreign_net_krw
+            except Exception:
+                continue
+    except ImportError:
+        pass
 
     # 시총 bar 정규화용 (24종목 중 최대 시총 기준)
     max_market_cap = max(
@@ -694,13 +710,33 @@ def render_master_index(
             f'</td>'
         )
 
+    def _foreign_cell(ticker: str) -> str:
+        """전일 외인 순매매 KRW — KRX 한국식 색 (+빨강 매수 / -파랑 매도)."""
+        krw = foreign_24h.get(ticker)
+        if krw is None:
+            return '<td class="foreign" data-sort-value="">—</td>'
+        eok = krw / 1e8
+        if abs(eok) < 50:
+            cls = "foreign-flat"
+        elif eok > 0:
+            cls = "foreign-buy"
+        else:
+            cls = "foreign-sell"
+        sign = "+" if eok > 0 else ""
+        # 표시: ±NNN억 (1조 이상은 NN.N조)
+        if abs(eok) >= 10000:
+            disp = f"{sign}{eok/10000:,.1f}조"
+        else:
+            disp = f"{sign}{eok:,.0f}억"
+        return f'<td class="foreign {cls}" data-sort-value="{krw}">{disp}</td>'
+
     rows_html: list[str] = []
     for sector, sector_entries in sector_groups.items():
         # 섹터 헤더 행
         with_reports = sum(1 for w in sector_entries if w.name in companies)
         rows_html.append(
             f'<tr class="sector-header" data-sector="{escape(sector)}">'
-            f'<td colspan="7">'
+            f'<td colspan="8">'
             f'<span class="sector-name">{escape(sector)}</span>'
             f'<span class="sector-stat">{with_reports}/{len(sector_entries)}</span>'
             f'</td></tr>'
@@ -710,6 +746,7 @@ def render_master_index(
             change_cell = _change_cell(tdata)
             spark_cell = _spark_cell(tdata)
             mcap_cell = _market_cap_cell(tdata)
+            foreign_cell = _foreign_cell(w.ticker)
             if w.name in companies:
                 latest = sorted(companies[w.name], key=lambda x: x.period, reverse=True)[0]
                 friendly = _period_to_friendly(latest.period)
@@ -725,6 +762,7 @@ def render_master_index(
                     f'{spark_cell}'
                     f'{change_cell}'
                     f'{mcap_cell}'
+                    f'{foreign_cell}'
                     f'<td class="latest" data-sort-value="{escape(latest.written_at)}">'
                     f'{escape(friendly)} · {escape(latest.written_at)}</td>'
                     f'<td class="action">{report_label} →</td>'
@@ -739,6 +777,7 @@ def render_master_index(
                     f'{spark_cell}'
                     f'{change_cell}'
                     f'{mcap_cell}'
+                    f'{foreign_cell}'
                     f'<td class="latest" data-sort-value=""><em class="empty-text">추적 중</em></td>'
                     f'<td class="action">대기</td>'
                     f'</tr>'
@@ -777,6 +816,7 @@ def render_master_index(
       <th class="spark">60d 추세</th>
       <th class="change sortable" data-sort-key="change" data-sort-type="number">변화 <span class="sort-arrow"></span></th>
       <th class="mcap sortable" data-sort-key="mcap" data-sort-type="number">시가총액 <span class="sort-arrow"></span></th>
+      <th class="foreign sortable" data-sort-key="foreign" data-sort-type="number" title="전일 외인 순매매 KRW">외인 24h <span class="sort-arrow"></span></th>
       <th class="latest sortable" data-sort-key="latest" data-sort-type="string">최신 보고서 <span class="sort-arrow"></span></th>
       <th class="action"></th>
     </tr>

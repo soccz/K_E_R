@@ -958,6 +958,15 @@ article.report h2, article.report h3 { scroll-margin-top: 80px; }
 .watchlist-table th.spark { width: 90px; text-align: left; }
 .watchlist-table th.change { width: 70px; text-align: right; }
 .watchlist-table th.mcap { width: 200px; text-align: right; }
+.watchlist-table th.foreign { width: 90px; text-align: right; }
+tr.stock-row td.foreign {
+  font-family: var(--mono); font-size: 13px;
+  text-align: right; font-feature-settings: "tnum";
+  padding-right: 16px; white-space: nowrap;
+}
+tr.stock-row td.foreign-buy { color: var(--kr-up); }
+tr.stock-row td.foreign-sell { color: var(--kr-down); }
+tr.stock-row td.foreign-flat { color: var(--kr-flat); opacity: 0.6; }
 .watchlist-table th.sortable {
   cursor: pointer; user-select: none;
   transition: color 120ms;
