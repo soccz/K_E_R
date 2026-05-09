@@ -12,6 +12,10 @@
 
 set -euo pipefail
 
+# systemd user 환경에서 claude CLI(~/.local/bin/claude) 접근 가능하도록 PATH 보강.
+# 대화형 셸 PATH와 systemd PATH가 다름 (.bashrc 안 읽힘).
+export PATH="$HOME/.local/bin:$HOME/.local/share/claude/versions:$PATH"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 

@@ -11,6 +11,9 @@
 
 set -euo pipefail
 
+# systemd user 환경에서 claude CLI(~/.local/bin/claude) 접근.
+export PATH="$HOME/.local/bin:$HOME/.local/share/claude/versions:$PATH"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
