@@ -29,7 +29,10 @@ check_disk_space() {
 write_health() {
   local timer_name="$1"
   local status="${2:-ok}"
-  local details="${3:-{}}"
+  # bash ${3:-{}} 는 첫 } 가 expansion을 종료해 ` "details": {"test": true}}` 같은
+  # malformed JSON 발생. 명시적 default 변수로 회피.
+  local default_details='{}'
+  local details="${3:-$default_details}"
   local now
   now=$(date '+%Y-%m-%dT%H:%M:%S%z')
   local file="$HEALTH_DIR/$timer_name.json"
