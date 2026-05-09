@@ -1,10 +1,11 @@
 [Unit]
-Description=K_E_R weekday — Tue 22:00 KST
+Description=K_E_R weekday — Tue/Fri 22:00 KST (주 2회 정기보고서)
 Documentation=https://github.com/soccz/K_E_R
 
 [Timer]
-# 매주 화요일 22:00 KST (서버 timezone이 Asia/Seoul이므로 local time)
-OnCalendar=Tue *-*-* 22:00:00
+# 매주 화·금 22:00 KST. 분기 마감 13주 사이클과 페이스 일치.
+# 24종목 × 2편/주 = 12주 → 다음 분기 마감 1주 전 24/24 완성.
+OnCalendar=Tue,Fri *-*-* 22:00:00
 # 슬롯 시간에 컴퓨터가 꺼져있었으면 부팅 즉시 catch-up
 Persistent=true
 # 같은 시간에 시스템 부하 분산 (60초 내 랜덤 지연)
