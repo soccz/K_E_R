@@ -67,14 +67,25 @@ class TriggerHit:
     detail: dict  # 트리거 raw 데이터
 
     def score(self) -> float:
-        """일간 메모 종목 카드 선정용 점수."""
+        """일간 메모 종목 카드 선정용 점수.
+
+        외인 severity는 |누적|/임계 비율이라 자릿수 자연 증폭 (4조 → 80x).
+        log 스케일로 cap해서 outlier가 dominant 안 되게 + 페르소나 §1.7 ★★★
+        가중치는 디커플링에 몰아둠.
+        """
+        import math
+
         coeffs = {
             TRIGGER_PRICE_MOVE: 20,
-            TRIGGER_FOREIGN_FLOW: 0.5,  # 0.5는 |외인 누적|/억 단위 가중치
+            TRIGGER_FOREIGN_FLOW: 12,  # log scale × 12 → -1조: 18, -10조: 35, -100조: 53
             TRIGGER_DART_DISCLOSURE: 30,
             TRIGGER_DECOUPLING: 50,  # ★★★ 페르소나 핵심
         }
-        return coeffs.get(self.trigger_type, 10) * self.severity
+        coeff = coeffs.get(self.trigger_type, 10)
+        if self.trigger_type == TRIGGER_FOREIGN_FLOW:
+            # log(1+severity)로 outlier 압축. severity 1 → ln2≈0.7, 80 → ln81≈4.4
+            return coeff * math.log1p(self.severity)
+        return coeff * self.severity
 
 
 @dataclass(frozen=True)

@@ -2,8 +2,13 @@
 # K_E_R 평일판 실행 wrapper.
 # systemd timer가 호출 (또는 수동: bin/run_weekly.sh)
 #
-# 현재는 placeholder — 삼성전자 사업보고서 1편.
-# TODO: 워치리스트 24종목 + DART 신규 공시 검색 → 그 주 가장 임팩트 큰 종목 자동 선정.
+# 자동 PERIOD 전환:
+#   - period_picker.py가 마감일 경과 + 24/24 미완성인 가장 오래된 PERIOD 선정
+#   - 2025-annual 24/24 완료 → 5/15 후 자동 2026-q1 전환
+#   - 모든 PERIOD 완료 시 exit 0 (다음 마감일까지 대기)
+#
+# Override (수동 디버그):
+#   WEEKDAY_TICKER=005930 WEEKDAY_PERIOD=2025-annual bin/run_weekly.sh
 
 set -euo pipefail
 
@@ -30,26 +35,28 @@ if [ -z "${DART_API_KEY:-}" ]; then
   exit 1
 fi
 
-# 기본: pick_next_ticker.py가 워치리스트 회전 (00_종합진단.md 없는 첫 종목)
-# 명시적 override: WEEKDAY_TICKER=005930 bin/run_weekly.sh
-BSNS_YEAR="${WEEKDAY_BSNS_YEAR:-2025}"
-REPRT_CODE="${WEEKDAY_REPRT_CODE:-11011}"
-PERIOD="${WEEKDAY_PERIOD:-2025-annual}"
-
+# 자동 PERIOD 전환 — period_picker.py가 활성 PERIOD + 다음 ticker 결정.
+# Override 시: WEEKDAY_TICKER + WEEKDAY_PERIOD + WEEKDAY_BSNS_YEAR + WEEKDAY_REPRT_CODE
 if [ -z "${WEEKDAY_TICKER:-}" ]; then
-  if TICKER=$("$PYTHON" -m pipeline.pick_next_ticker --period "$PERIOD"); then
-    :
+  if PICK=$("$PYTHON" -m pipeline.period_picker --format csv); then
+    PERIOD=$(echo "$PICK" | cut -d, -f1)
+    BSNS_YEAR=$(echo "$PICK" | cut -d, -f2)
+    REPRT_CODE=$(echo "$PICK" | cut -d, -f3)
+    TICKER=$(echo "$PICK" | cut -d, -f4)
   else
     PICK_RC=$?
     if [ "$PICK_RC" -eq 2 ]; then
-      echo "[$LOG_TS] all-done: $PERIOD 24종목 모두 완료 — skip"
+      echo "[$LOG_TS] all-done: 모든 활성 PERIOD 24/24 완료 또는 다음 마감일 대기 — skip"
       exit 0
     fi
-    echo "ERROR: 다음 티커 선정 실패 (rc=$PICK_RC)"
+    echo "ERROR: PERIOD 선정 실패 (rc=$PICK_RC)"
     exit "$PICK_RC"
   fi
 else
   TICKER="$WEEKDAY_TICKER"
+  BSNS_YEAR="${WEEKDAY_BSNS_YEAR:-2025}"
+  REPRT_CODE="${WEEKDAY_REPRT_CODE:-11011}"
+  PERIOD="${WEEKDAY_PERIOD:-2025-annual}"
 fi
 
 echo "ticker=$TICKER bsns_year=$BSNS_YEAR reprt_code=$REPRT_CODE period=$PERIOD"
