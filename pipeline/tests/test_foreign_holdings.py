@@ -44,6 +44,10 @@ def test_fetch_with_mock_majorstock(monkeypatch):
     monkeypatch.setattr(
         foreign_holdings, "_fetch_dart_majorstock", lambda corp_code: raw_items
     )
+    # KRX 일별 외인 비중도 mock (실제 호출 차단 — 테스트 격리)
+    monkeypatch.setattr(
+        foreign_holdings, "_fetch_krx_foreign_holdings", lambda ticker, days=30: []
+    )
 
     snap = foreign_holdings.fetch_foreign_holding_snapshot(
         ticker_krx="000660",
@@ -57,13 +61,17 @@ def test_fetch_with_mock_majorstock(monkeypatch):
     assert foreign[0].holding_pct == 5.42
     assert snap.foreign_major_holders_count == 1
     assert snap.foreign_major_holders_pct_sum == 5.42
+    # KRX 호출 모킹으로 빈 리스트 → krx_daily_foreign_pct None
     assert snap.krx_daily_foreign_pct is None
-    # KRX placeholder note 의무
+    # KRX 미수집 note 확인
     assert any("KRX" in n for n in snap.notes)
 
 
 def test_fetch_handles_no_major_holders(monkeypatch):
     monkeypatch.setattr(foreign_holdings, "_fetch_dart_majorstock", lambda c: [])
+    monkeypatch.setattr(
+        foreign_holdings, "_fetch_krx_foreign_holdings", lambda ticker, days=30: []
+    )
     snap = foreign_holdings.fetch_foreign_holding_snapshot(
         ticker_krx="000660",
         company_name="SK하이닉스",
@@ -74,7 +82,10 @@ def test_fetch_handles_no_major_holders(monkeypatch):
     assert any("0건" in n or "5% 미만" in n for n in snap.notes)
 
 
-def test_to_prompt_dict_contains_persona_marker():
+def test_to_prompt_dict_contains_persona_marker(monkeypatch):
+    monkeypatch.setattr(
+        foreign_holdings, "_fetch_krx_foreign_holdings", lambda ticker, days=30: []
+    )
     snap = foreign_holdings.fetch_foreign_holding_snapshot(
         ticker_krx="000660",
         company_name="SK하이닉스",
@@ -83,3 +94,34 @@ def test_to_prompt_dict_contains_persona_marker():
     p = snap.to_prompt_dict()
     assert "★★★" in p["usage_rule"]
     assert "확인되지 않음" in p["usage_rule"]
+
+
+def test_krx_daily_foreign_holdings_integration(monkeypatch):
+    """KRX mock으로 일별 추이 + 5d 변동 산출 검증."""
+    krx_history = [
+        {"date": "2026-05-08", "holding_pct": 49.40, "holding_shares": 100,
+         "listed_shares": 200, "exhaustion_pct": 49.40},
+        {"date": "2026-05-07", "holding_pct": 49.62, "holding_shares": 100,
+         "listed_shares": 200, "exhaustion_pct": 49.62},
+        {"date": "2026-05-06", "holding_pct": 49.37, "holding_shares": 100,
+         "listed_shares": 200, "exhaustion_pct": 49.37},
+        {"date": "2026-05-04", "holding_pct": 49.25, "holding_shares": 100,
+         "listed_shares": 200, "exhaustion_pct": 49.25},
+        {"date": "2026-04-30", "holding_pct": 49.28, "holding_shares": 100,
+         "listed_shares": 200, "exhaustion_pct": 49.28},
+        {"date": "2026-04-29", "holding_pct": 49.18, "holding_shares": 100,
+         "listed_shares": 200, "exhaustion_pct": 49.18},
+    ]
+    monkeypatch.setattr(foreign_holdings, "_fetch_dart_majorstock", lambda c: [])
+    monkeypatch.setattr(
+        foreign_holdings, "_fetch_krx_foreign_holdings",
+        lambda ticker, days=30: krx_history,
+    )
+    snap = foreign_holdings.fetch_foreign_holding_snapshot(
+        "005930", "삼성전자", "00126380"
+    )
+    assert snap.krx_daily_foreign_pct == 49.40
+    # 5영업일 전(=index 5, 49.18) 대비 변동
+    assert snap.krx_foreign_pct_change_5d == round(49.40 - 49.18, 3)
+    assert len(snap.krx_daily_foreign_history) == 6
+    assert "krx_foreign_pct" in snap.sources

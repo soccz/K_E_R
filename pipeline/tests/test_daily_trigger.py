@@ -107,13 +107,60 @@ def test_check_price_movement_handles_fetch_failure(monkeypatch):
     assert hit is None
 
 
-# ───── 외인 (v0.1 placeholder) ─────
+# ───── 외인 수급 ─────
 
 
-def test_check_foreign_flow_returns_none_v0_1():
-    """v0.1: KRX 계정 미통합 → 항상 None."""
+def _make_flow_day(date, pct, foreign_krw, source="krx", close=100000):
+    """test fixture — ForeignFlowDay 생성."""
+    from pipeline.foreign_flow import ForeignFlowDay
+    return ForeignFlowDay(
+        date=date, close=close, pct_change=pct, volume=0,
+        foreign_net_krw=foreign_krw, source=source,
+    )
+
+
+def test_check_foreign_flow_below_threshold(monkeypatch):
+    """3일 누적 외인 ±500억 미만 → 미트리거."""
+    from pipeline import foreign_flow
+    monkeypatch.setattr(
+        foreign_flow, "fetch_foreign_flow",
+        lambda t, days, **kw: [
+            _make_flow_day("2026-05-08", -1.0, -100e8),
+            _make_flow_day("2026-05-07", -0.5, -150e8),
+            _make_flow_day("2026-05-06", +0.3, +200e8),
+        ],
+    )
     hit = dt.check_foreign_flow("000660", "SK하이닉스")
-    assert hit is None
+    assert hit is None  # 3일 누적 -50억, 임계 미달
+
+
+def test_check_foreign_flow_sell_hit(monkeypatch):
+    """3일 누적 외인 -2,000억 → 매도 트리거 발현."""
+    from pipeline import foreign_flow
+    monkeypatch.setattr(
+        foreign_flow, "fetch_foreign_flow",
+        lambda t, days, **kw: [
+            _make_flow_day("2026-05-08", -1.5, -800e8),
+            _make_flow_day("2026-05-07", -0.5, -700e8),
+            _make_flow_day("2026-05-06", +0.3, -500e8),
+        ],
+    )
+    hit = dt.check_foreign_flow("000660", "SK하이닉스")
+    assert hit is not None
+    assert hit.trigger_type == dt.TRIGGER_FOREIGN_FLOW
+    assert hit.detail["direction"] == "매도"
+    assert hit.detail["cumulative_eok"] == -2000.0
+    assert hit.severity == 4.0  # 2000억 / 500억
+
+
+def test_check_foreign_flow_insufficient_data(monkeypatch):
+    """N영업일 데이터 부족 → None."""
+    from pipeline import foreign_flow
+    monkeypatch.setattr(
+        foreign_flow, "fetch_foreign_flow",
+        lambda t, days, **kw: [_make_flow_day("2026-05-08", -1.5, -800e8)],
+    )
+    assert dt.check_foreign_flow("000660", "SK하이닉스") is None
 
 
 # ───── DART 공시 ─────
@@ -176,12 +223,61 @@ def test_check_dart_disclosure_handles_empty(monkeypatch):
     assert dt.check_dart_disclosure("000660", "SK하이닉스", "00164779") is None
 
 
-# ───── 디커플링 (v0.1 placeholder) ─────
+# ───── 디커플링 ─────
 
 
-def test_check_decoupling_returns_none_v0_1():
-    """v0.1: 외인 데이터 미통합 → None."""
+def test_check_decoupling_no_data(monkeypatch):
+    """fetch 결과 빈 리스트 → None."""
+    from pipeline import foreign_flow
+    monkeypatch.setattr(foreign_flow, "fetch_foreign_flow", lambda t, days, **kw: [])
     assert dt.check_decoupling("000660", "SK하이닉스") is None
+
+
+def test_check_decoupling_same_direction(monkeypatch):
+    """가격↑ 외인↑ 같은 방향 → 디커플링 아님."""
+    from pipeline import foreign_flow
+    monkeypatch.setattr(
+        foreign_flow, "fetch_foreign_flow",
+        lambda t, days, **kw: [_make_flow_day("2026-05-08", +5.0, +500e8)],
+    )
+    assert dt.check_decoupling("000660", "SK하이닉스") is None
+
+
+def test_check_decoupling_below_thresholds(monkeypatch):
+    """가격 +1% (임계 ±2% 미달) → 디커플링 검사 X."""
+    from pipeline import foreign_flow
+    monkeypatch.setattr(
+        foreign_flow, "fetch_foreign_flow",
+        lambda t, days, **kw: [_make_flow_day("2026-05-08", +1.0, -500e8)],
+    )
+    assert dt.check_decoupling("000660", "SK하이닉스") is None
+
+
+def test_check_decoupling_korean_euphoria_foreign_sell(monkeypatch):
+    """가격 +5% / 외인 -800억 → 국내 환호 / 외인 매도 디커플링."""
+    from pipeline import foreign_flow
+    monkeypatch.setattr(
+        foreign_flow, "fetch_foreign_flow",
+        lambda t, days, **kw: [_make_flow_day("2026-05-08", +5.0, -800e8)],
+    )
+    hit = dt.check_decoupling("000660", "SK하이닉스")
+    assert hit is not None
+    assert hit.trigger_type == dt.TRIGGER_DECOUPLING
+    assert hit.detail["label"] == "국내 환호 / 외인 매도"
+    assert hit.detail["pct_change"] == 5.0
+    assert hit.detail["foreign_eok"] == -800.0
+
+
+def test_check_decoupling_panic_foreign_buy(monkeypatch):
+    """가격 -3% / 외인 +500억 → 국내 패닉 / 외인 매수."""
+    from pipeline import foreign_flow
+    monkeypatch.setattr(
+        foreign_flow, "fetch_foreign_flow",
+        lambda t, days, **kw: [_make_flow_day("2026-05-08", -3.0, +500e8)],
+    )
+    hit = dt.check_decoupling("000660", "SK하이닉스")
+    assert hit is not None
+    assert hit.detail["label"] == "국내 패닉 / 외인 매수"
 
 
 # ───── 종합 평가 ─────
@@ -229,6 +325,12 @@ def test_evaluate_all_triggers_combines_hits(monkeypatch):
 
     monkeypatch.setattr(dt, "_fetch_recent_ohlcv", _mock_ohlcv)
     monkeypatch.setattr(dt, "_fetch_recent_dart_filings", _mock_filings)
+    # 외인/디커플링 — 임계 미달 데이터로 mock (트리거 미발현)
+    from pipeline import foreign_flow
+    monkeypatch.setattr(
+        foreign_flow, "fetch_foreign_flow",
+        lambda t, days, **kw: [_make_flow_day(f"2026-05-0{i}", 0.0, 0) for i in (8, 7, 6)],
+    )
 
     report = dt.evaluate_all_triggers(watchlist, fetch_date="2026-05-09")
     assert report.should_publish()
@@ -237,18 +339,23 @@ def test_evaluate_all_triggers_combines_hits(monkeypatch):
     assert types == [dt.TRIGGER_DART_DISCLOSURE, dt.TRIGGER_PRICE_MOVE]
     # 점수 정렬: DART(45 = 30*1.5) > 가격(28 = 20*1.4)
     assert report.hits[0].trigger_type == dt.TRIGGER_DART_DISCLOSURE
-    # 외인·디커플링 placeholder note
-    assert any("외인" in n and "placeholder" in n for n in report.notes)
+    # 4종 트리거 모두 활성 메시지
+    assert any("4종 트리거 모두 활성" in n for n in report.notes)
 
 
 def test_evaluate_no_triggers_means_no_publish(monkeypatch):
-    """모든 종목 정상 (가격 변동 없음, 공시 없음) → 발행 X."""
+    """모든 종목 정상 (가격 변동 없음, 공시 없음, 외인 0) → 발행 X."""
     monkeypatch.setattr(dt, "_fetch_recent_ohlcv", lambda *a, **kw: {
         "today_close": 100000, "yesterday_close": 100000,
         "today_pct_change": 0.5, "today_volume": 0, "avg_volume_60d": 0,
         "today_date": "2026-05-09",
     })
     monkeypatch.setattr(dt, "_fetch_recent_dart_filings", lambda *a, **kw: [])
+    from pipeline import foreign_flow
+    monkeypatch.setattr(
+        foreign_flow, "fetch_foreign_flow",
+        lambda t, days, **kw: [_make_flow_day(f"2026-05-0{i}", 0.0, 0) for i in (8, 7, 6)],
+    )
 
     watchlist = [_MockEntry("000660", "SK하이닉스", "00164779")]
     report = dt.evaluate_all_triggers(watchlist)

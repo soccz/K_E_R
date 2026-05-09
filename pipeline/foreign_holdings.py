@@ -6,16 +6,15 @@
   3. 장기 외인(연기금·SWF·패시브) vs 단기 외인 구분
   4. 국내 인기 vs 외인 동향 디커플링
 
-DART 공시 범위에서 잡히는 것:
-  - majorstock.json: 5% 이상 보유공시 — 일부 글로벌 패시브 펀드(Vanguard·BlackRock 등) 잡힘
-  - 사업보고서 IV. 주주현황: SK스퀘어 등 최대주주 + '기타주주' 합산만, 외국인 별도 분리 X
+데이터 소스:
+  - DART majorstock.json: 5% 이상 보유공시 — 일부 글로벌 패시브 펀드(Vanguard·BlackRock 등) 잡힘
+  - DART 사업보고서 IV. 주주현황: SK스퀘어 등 최대주주 + '기타주주' 합산만, 외국인 별도 분리 X
+  - KRX 외국인 보유 한도소진률 (pykrx, KRX_ID/KRX_PW 인증):
+    - 일별 외인 보유 비중·보유주식수·한도수량 — 1·2·4 항목 직접 데이터
+    - 장기 vs 단기 외인 구분은 여전히 미통합 (KRX 투자자유형별 거래 OpenAPI 별도 필요)
 
-DART에서 못 잡히는 것:
-  - 일별 외인 보유잔고: KRX MIS 별도 API
-  - 장기 vs 단기 외인 구분: KRX 투자자유형별 거래 OpenAPI
-
-본 모듈 v0.1: DART 5% 이상 보유공시만 fetch + 일별 KRX placeholder.
-KRX 일별 잔고는 환경변수 KRX_API_KEY 발급 후 v0.2에서 구현.
+v0.2: DART majorstock + KRX 일별 외인 비중 통합. KRX_ID/KRX_PW 미설정 시
+KRX 부분 자동 skip (DART만으로도 동작).
 """
 from __future__ import annotations
 
@@ -44,7 +43,10 @@ class ForeignHoldingSnapshot:
     major_holders: list[MajorHolder] = field(default_factory=list)
     foreign_major_holders_count: int = 0
     foreign_major_holders_pct_sum: float | None = None  # 외국인 5%이상 보유 합산 (참고치)
-    krx_daily_foreign_pct: float | None = None  # KRX 일별 외인 비중 (v0.2 예정)
+    # KRX 일별 외인 보유 (pykrx 인증 필요)
+    krx_daily_foreign_pct: float | None = None  # 가장 최근 영업일 외인 보유 비중
+    krx_daily_foreign_history: list[dict] = field(default_factory=list)  # 최근 N영업일 추이
+    krx_foreign_pct_change_5d: float | None = None  # 5영업일 전 대비 변동 (pp)
     sources: dict[str, str] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
@@ -56,17 +58,19 @@ class ForeignHoldingSnapshot:
             "major_holders": [asdict(h) for h in self.major_holders],
             "foreign_major_holders_count": self.foreign_major_holders_count,
             "foreign_major_holders_pct_sum_note": (
-                "DART 5%이상 보유공시 기준 외국인 합산 — 추세 데이터 아님, 시점 스냅샷. "
-                "전체 외인 비중은 KRX 데이터 필요(아직 미통합)."
+                "DART 5%이상 보유공시 기준 외국인 합산 — 추세 데이터 아님, 시점 스냅샷."
             ),
             "foreign_major_holders_pct_sum": self.foreign_major_holders_pct_sum,
             "krx_daily_foreign_pct": self.krx_daily_foreign_pct,
+            "krx_foreign_pct_change_5d": self.krx_foreign_pct_change_5d,
+            "krx_daily_foreign_history": self.krx_daily_foreign_history,
             "sources": self.sources,
             "notes": self.notes,
             "usage_rule": (
-                "★★★ 페르소나 외인 동향 항목. major_holders는 DART 5% 이상 보유공시에서만 잡히는 "
-                "일부 장기 외인(글로벌 패시브 펀드 등) 표본. 전체 외인 비중·추세·장단기 구분은 "
-                "여기서 잡히지 않으니 그 부분은 '확인되지 않음 (KRX 데이터 미통합)'으로 표시해라."
+                "★★★ 페르소나 외인 동향 항목. major_holders는 DART 5% 이상 보유공시에서 잡히는 "
+                "장기 외인(글로벌 패시브) 표본. krx_daily_foreign_pct는 KRX 정식 외인 보유 비중 "
+                "(전체 외인 — 5% 미만 포함). krx_foreign_pct_change_5d는 5영업일 전 대비 pp 변동. "
+                "'장기 vs 단기 외인 구분'만 여전히 KRX 미통합 → 그 부분은 '확인되지 않음'으로 처리."
             ),
         }
 
@@ -123,6 +127,50 @@ def _fetch_dart_majorstock(corp_code: str) -> list[dict]:
     return list(data.get("list") or [])
 
 
+def _fetch_krx_foreign_holdings(ticker_krx: str, days: int = 30) -> list[dict]:
+    """KRX 일별 외인 보유 비중 (pykrx 인증).
+
+    반환: [{date, holding_pct, holding_shares, listed_shares, exhaustion_pct}, ...]
+    최신 → 과거 순. 인증 실패 또는 pykrx 미설치 시 빈 리스트.
+    """
+    import os
+
+    if not (os.getenv("KRX_ID") and os.getenv("KRX_PW")):
+        return []
+    try:
+        from pykrx import stock
+    except ImportError:
+        return []
+    end = datetime.now()
+    from datetime import timedelta as _td
+
+    start = end - _td(days=int(days * 1.6) + 5)
+    try:
+        df = stock.get_exhaustion_rates_of_foreign_investment_by_date(
+            start.strftime("%Y%m%d"), end.strftime("%Y%m%d"), ticker_krx
+        )
+    except Exception:
+        return []
+    if df is None or df.empty:
+        return []
+    out: list[dict] = []
+    for idx, row in df.iterrows():
+        try:
+            out.append(
+                {
+                    "date": idx.strftime("%Y-%m-%d"),
+                    "holding_pct": float(row["지분율"]),
+                    "holding_shares": int(row["보유수량"]),
+                    "listed_shares": int(row["상장주식수"]),
+                    "exhaustion_pct": float(row["한도소진률"]),
+                }
+            )
+        except (KeyError, ValueError, TypeError):
+            continue
+    out.sort(key=lambda d: d["date"], reverse=True)
+    return out[:days]
+
+
 def fetch_foreign_holding_snapshot(
     ticker_krx: str,
     company_name: str,
@@ -175,10 +223,23 @@ def fetch_foreign_holding_snapshot(
     if foreign_pct_sum is not None and foreign_pct_sum == 0:
         foreign_pct_sum = None
 
-    notes.append(
-        "KRX 일별 외인 보유잔고는 본 v0.1에서 미통합 — KRX_API_KEY 환경변수 발급 후 v0.2 예정. "
-        "현재는 DART 5% 이상 보유공시 표본만 제공되며 '전체 외인 비중·추세'는 '확인되지 않음'으로 처리해야 한다."
-    )
+    # KRX 일별 외인 보유 비중 (KRX_ID/KRX_PW 인증 필요)
+    krx_history = _fetch_krx_foreign_holdings(ticker_krx, days=30)
+    krx_latest_pct: float | None = None
+    krx_change_5d: float | None = None
+    if krx_history:
+        krx_latest_pct = krx_history[0]["holding_pct"]
+        # 5영업일 전 대비 변동 (pp)
+        if len(krx_history) >= 6:
+            krx_change_5d = round(
+                krx_history[0]["holding_pct"] - krx_history[5]["holding_pct"], 3
+            )
+        sources["krx_foreign_pct"] = "KRX 외국인 보유 한도소진률 (pykrx 인증)"
+    else:
+        notes.append(
+            "KRX 일별 외인 보유 비중 미수집 — KRX_ID/KRX_PW 미설정 또는 인증 실패. "
+            "DART 5% 이상 보유공시(major_holders)만 제공."
+        )
 
     return ForeignHoldingSnapshot(
         ticker=ticker_krx,
@@ -187,7 +248,9 @@ def fetch_foreign_holding_snapshot(
         major_holders=holders,
         foreign_major_holders_count=foreign_count,
         foreign_major_holders_pct_sum=foreign_pct_sum,
-        krx_daily_foreign_pct=None,  # v0.2
+        krx_daily_foreign_pct=krx_latest_pct,
+        krx_daily_foreign_history=krx_history,
+        krx_foreign_pct_change_5d=krx_change_5d,
         sources=sources,
         notes=notes,
     )
@@ -208,6 +271,9 @@ def load_foreign_holding_snapshot(
             try:
                 data = json.loads(cache_path.read_text(encoding="utf-8"))
                 holders_data = data.pop("major_holders", [])
+                # 구버전 cache 호환 (krx_daily_foreign_history / change_5d 미존재)
+                data.setdefault("krx_daily_foreign_history", [])
+                data.setdefault("krx_foreign_pct_change_5d", None)
                 snap = ForeignHoldingSnapshot(
                     **data,
                     major_holders=[MajorHolder(**h) for h in holders_data],

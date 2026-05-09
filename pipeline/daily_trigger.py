@@ -6,11 +6,11 @@
 매일 16:00 KST(장마감 +30분) 자동 실행:
   $ python -m pipeline.daily_trigger --check
 
-트리거 4종:
+트리거 4종 (모두 활성):
   3.1 가격 변동: 워치리스트 24종목 일별 등락률 ±5% (KRX OHLCV)
-  3.2 외인 수급: 3일 누적 외인 ±500억 (KRX 계정 필요, 현재 placeholder)
+  3.2 외인 수급: 3일 누적 외인 ±500억 (KRX 매매대금 → Naver fallback)
   3.3 DART 공시: 잠정실적·M&A·정정공시·자사주 소각·주요사항 (DART list.json)
-  3.4 디커플링: 가격 ±2% + 외인 반대방향 ±300억 (외인 통합 후 활성)
+  3.4 디커플링: 가격 ±2% + 외인 반대방향 ±300억 (페르소나 §1.7 핵심 ★★★)
 
 점수화:
   score = 20·|등락률| + 0.5·|외인 누적| + 30·공시 임팩트 + 50·디커플링 강도
@@ -180,13 +180,36 @@ def check_foreign_flow(
     threshold_krw: float = FOREIGN_FLOW_KRW,
     days: int = FOREIGN_FLOW_DAYS,
 ) -> TriggerHit | None:
-    """3일 누적 외인 순매매 ±threshold_krw 이상이면 트리거.
+    """N영업일 누적 외인 순매매 ±threshold_krw 이상이면 트리거.
 
-    v0.1 정책: KRX 일별 투자자별 매매대금은 KRX 계정(KRX_ID/KRX_PW) 필요.
-    현재 미통합 → 항상 None 반환 (페르소나 정책상 학습 추정 금지).
-    KRX 계정 발급 후 v0.4에서 활성화.
+    출처: KRX 정식 매매대금 (1순위) → Naver Finance fallback.
+    KRX_ID/KRX_PW 미설정 시 자동으로 Naver로 폴백.
     """
-    return None  # placeholder
+    from pipeline.foreign_flow import cumulative_foreign_krw, fetch_foreign_flow
+
+    flow = fetch_foreign_flow(ticker_krx, days=days)
+    if len(flow) < days:
+        return None
+    cumulative = cumulative_foreign_krw(flow, n=days)
+    if abs(cumulative) < threshold_krw:
+        return None
+    direction = "매수" if cumulative > 0 else "매도"
+    sources = sorted({d.source for d in flow[:days]})
+    return TriggerHit(
+        ticker=ticker_krx,
+        company_name=company_name,
+        trigger_type=TRIGGER_FOREIGN_FLOW,
+        severity=abs(cumulative) / threshold_krw,
+        detail={
+            "cumulative_krw": cumulative,
+            "cumulative_eok": round(cumulative / 1e8, 1),
+            "direction": direction,
+            "days_count": days,
+            "first_date": flow[days - 1].date,
+            "last_date": flow[0].date,
+            "data_source": "+".join(sources),
+        },
+    )
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -281,12 +304,47 @@ def check_decoupling(
     price_threshold_pct: float = DECOUPLING_PRICE_PCT,
     foreign_threshold_krw: float = DECOUPLING_FOREIGN_KRW,
 ) -> TriggerHit | None:
-    """가격 ±2% + 외인 반대방향 ±300억 → 트리거.
+    """가격 ±price_threshold_pct AND 외인 반대방향 ±foreign_threshold_krw → 트리거.
 
-    v0.1 정책: 외인 일별 데이터 미통합 → 항상 None.
-    페르소나 §1.7 "국내 환호 vs 외인 디커플링" 발현 자동 감지는 KRX 계정 v0.4에서.
+    페르소나 §1.7 "국내 환호 vs 외인 디커플링" 자동 감지.
+    예: 가격 +5% 인데 외인 -800억 매도 → "국내 환호 / 외인 거부" 시그널.
+    출처: KRX (1순위) → Naver fallback.
     """
-    return None  # placeholder
+    from pipeline.foreign_flow import fetch_foreign_flow
+
+    flow = fetch_foreign_flow(ticker_krx, days=1)
+    if not flow:
+        return None
+    today = flow[0]
+
+    if abs(today.pct_change) < price_threshold_pct:
+        return None
+    if abs(today.foreign_net_krw) < foreign_threshold_krw:
+        return None
+
+    price_up = today.pct_change > 0
+    foreign_buy = today.foreign_net_krw > 0
+    if price_up == foreign_buy:
+        return None  # 같은 방향 → 디커플링 아님
+
+    label = "국내 환호 / 외인 매도" if price_up else "국내 패닉 / 외인 매수"
+    # severity = 가격 over-threshold × 외인 over-threshold (둘 다 가산 시 강도 큼)
+    sev_price = abs(today.pct_change) / price_threshold_pct
+    sev_foreign = abs(today.foreign_net_krw) / foreign_threshold_krw
+    return TriggerHit(
+        ticker=ticker_krx,
+        company_name=company_name,
+        trigger_type=TRIGGER_DECOUPLING,
+        severity=(sev_price + sev_foreign) / 2,
+        detail={
+            "date": today.date,
+            "pct_change": round(today.pct_change, 2),
+            "foreign_krw": today.foreign_net_krw,
+            "foreign_eok": round(today.foreign_net_krw / 1e8, 1),
+            "label": label,
+            "data_source": today.source,
+        },
+    )
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -306,10 +364,8 @@ def evaluate_all_triggers(
 
     sources["price"] = "pykrx KRX OHLCV"
     sources["dart"] = "DART list.json"
-    notes.append(
-        "외인 수급(3.2)·디커플링(3.4) 트리거는 KRX 계정(KRX_ID/KRX_PW) 미통합으로 placeholder 상태. "
-        "현재 작동 트리거: 가격 변동(3.1)·DART 공시(3.3)."
-    )
+    sources["foreign"] = "KRX 매매대금 (1순위) → Naver Finance fallback"
+    notes.append("4종 트리거 모두 활성: 가격(3.1)·외인 수급(3.2)·DART 공시(3.3)·디커플링(3.4).")
 
     for entry in watchlist_entries:
         ticker = entry.ticker
@@ -321,7 +377,7 @@ def evaluate_all_triggers(
         if h_price:
             hits.append(h_price)
 
-        # 3.2 외인 (placeholder)
+        # 3.2 외인 수급 (3일 누적 ±500억)
         h_foreign = check_foreign_flow(ticker, company)
         if h_foreign:
             hits.append(h_foreign)
@@ -332,7 +388,7 @@ def evaluate_all_triggers(
             if h_dart:
                 hits.append(h_dart)
 
-        # 3.4 디커플링 (placeholder)
+        # 3.4 디커플링 (가격±2% AND 외인 반대방향±300억)
         h_decouple = check_decoupling(ticker, company)
         if h_decouple:
             hits.append(h_decouple)
