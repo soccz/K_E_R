@@ -503,10 +503,12 @@ def render_company_index(
     out_html_path: Path,
     entries: list[ReportEntry],
     ticker: str = "",
+    sector: str = "",
 ) -> None:
-    """회사별 보고서 목록 — 정렬 토글(최신순/과거순) 포함.
+    """회사별 페이지 — 보고서 카드 + 외인 보유 비중 30일 추이.
 
-    ticker 제공 시 외인 보유 비중 30일 추이 SVG 차트 노출 (페르소나 §1.7).
+    entries 비어있어도 (보고서 없는 워치리스트 종목) placeholder 페이지 생성.
+    ticker 제공 시 외인 보유 비중 30일 SVG 차트 노출 (페르소나 §1.7).
     """
     sorted_entries = sorted(entries, key=lambda x: x.period, reverse=True)
     cards: list[str] = []
@@ -533,14 +535,10 @@ def render_company_index(
 
     foreign_chart_html = _render_foreign_holding_chart(ticker)
 
-    body = f"""
-<div class="page-hero">
-  <span class="doc-tag">Issuer Coverage</span>
-  <h1>{escape(company)}</h1>
-  <p class="subtitle">분기·연간 종합 진단 — 누적 {len(entries)}건</p>
-  {foreign_chart_html}
-</div>
-
+    # 보고서 있으면 grid + 정렬, 없으면 placeholder 메시지
+    if entries:
+        subtitle = f"분기·연간 종합 진단 — 누적 {len(entries)}건"
+        reports_section = f"""
 <div class="list-controls">
   <span class="list-controls-label">정렬</span>
   <div class="sort-toggle" role="tablist">
@@ -568,6 +566,27 @@ def render_company_index(
     }});
   }};
 </script>"""
+    else:
+        sector_label = f" · {escape(sector)}" if sector else ""
+        subtitle = f"워치리스트 추적 종목{sector_label} — 사업보고서 발행 예정"
+        reports_section = """
+<div class="empty-coverage">
+  <p class="empty-coverage-title">아직 사업보고서 미발행</p>
+  <p class="empty-coverage-meta">
+    워치리스트 24종목 정기보고서 자동 발행 cron 진행 중. 발행 즉시 본 페이지에 노출.
+    상단 외인 보유 비중 추이는 KRX 일별 데이터 기반 실시간 갱신.
+  </p>
+  <a href="../index.html" class="empty-coverage-back">← 24종목 마스터 인덱스</a>
+</div>"""
+
+    body = f"""
+<div class="page-hero">
+  <span class="doc-tag">Issuer Coverage</span>
+  <h1>{escape(company)}</h1>
+  <p class="subtitle">{subtitle}</p>
+  {foreign_chart_html}
+</div>
+{reports_section}"""
 
     breadcrumb = f"""
 <div class="container" style="padding-top:24px; padding-bottom:0; font-size:12px; color:var(--text-muted); letter-spacing:0.04em;">
@@ -870,8 +889,10 @@ def render_master_index(
                     f'</tr>'
                 )
             else:
+                href = f"{w.name}/index.html"
                 rows_html.append(
-                    f'<tr class="stock-row stock-empty" data-sector="{escape(sector)}" data-active="0">'
+                    f'<tr class="stock-row stock-empty" data-sector="{escape(sector)}" '
+                    f'data-active="0" onclick="location.href=\'{escape(href)}\'">'
                     f'<td class="status"><span class="dot dot-empty"></span></td>'
                     f'<td class="name" data-sort-value="{escape(w.name)}">{escape(w.name)}'
                     f'<span class="ticker">{escape(w.ticker) if w.ticker else ""}</span></td>'
@@ -880,7 +901,7 @@ def render_master_index(
                     f'{mcap_cell}'
                     f'{foreign_cell}'
                     f'<td class="latest" data-sort-value=""><em class="empty-text">추적 중</em></td>'
-                    f'<td class="action">대기</td>'
+                    f'<td class="action">외인 차트 →</td>'
                     f'</tr>'
                 )
 
@@ -1093,12 +1114,14 @@ def render_all(
     discovered = discover_reports(companies_dir)
     site_root.mkdir(parents=True, exist_ok=True)
 
-    # 워치리스트 먼저 — 회사별 ticker 매핑(외인 보유율 차트용)
+    # 워치리스트 먼저 — 회사별 ticker/sector 매핑
     watchlist: list[WatchlistEntry] | None = None
     company_to_ticker: dict[str, str] = {}
+    company_to_sector: dict[str, str] = {}
     if watchlist_path and watchlist_path.exists():
         watchlist = parse_watchlist(watchlist_path.read_text(encoding="utf-8"))
         company_to_ticker = {w.name: w.ticker for w in watchlist if w.ticker}
+        company_to_sector = {w.name: w.sector for w in watchlist if w.sector}
 
     total_reports = 0
     rendered = 0
@@ -1122,7 +1145,21 @@ def render_all(
         render_company_index(
             company, company_html_dir, company_index, entries,
             ticker=company_to_ticker.get(company, ""),
+            sector=company_to_sector.get(company, ""),
         )
+
+    # 워치리스트 24종목 중 보고서 없는 종목도 placeholder 페이지 생성 (외인 차트만)
+    if watchlist:
+        for w in watchlist:
+            if w.name in discovered:
+                continue  # 이미 위에서 처리
+            company_html_dir = site_root / w.name
+            company_html_dir.mkdir(parents=True, exist_ok=True)
+            company_index = company_html_dir / "index.html"
+            render_company_index(
+                w.name, company_html_dir, company_index, entries=[],
+                ticker=w.ticker, sector=w.sector,
+            )
 
     # 일간 메모 렌더 (옵션)
     daily_count = 0

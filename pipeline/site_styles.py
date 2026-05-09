@@ -1016,6 +1016,29 @@ tr.stock-row td.foreign-flat { color: var(--kr-flat); opacity: 0.6; }
   color: var(--text-muted); margin-top: 6px;
   letter-spacing: 0.04em;
 }
+
+/* 보고서 미발행 회사 페이지 placeholder */
+.empty-coverage {
+  max-width: 720px; margin: 32px auto 60px;
+  padding: 24px 28px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--rule);
+}
+.empty-coverage-title {
+  font-size: 15px; font-weight: 600; color: var(--text);
+  margin: 0 0 8px;
+}
+.empty-coverage-meta {
+  font-size: 13.5px; line-height: 1.65;
+  color: var(--text-secondary); margin: 0 0 16px;
+}
+.empty-coverage-back {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--text-muted); text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+.empty-coverage-back:hover { color: var(--accent); }
 .watchlist-table th.sortable {
   cursor: pointer; user-select: none;
   transition: color 120ms;
