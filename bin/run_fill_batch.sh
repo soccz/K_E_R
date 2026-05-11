@@ -41,7 +41,8 @@ LOG="$LOG_DIR/fill_batch_$(date +%Y%m%d_%H%M).log"
       attempts=$((attempts+1))
       echo ""
       echo ">>> [$attempts/$max_attempts] PERIOD=$PERIOD TICKER=$TICKER 시작 $(date '+%H:%M:%S')"
-      if CLAUDE_CODE_TIMEOUT_SEC=1800 GIT_AUTO_PUSH=0 SITE_AUTO_PUBLISH=0 \
+      # 매 ticker push: 사용자가 사이트에서 점진 완성 확인 가능 + batch timeout/crash 시 손실 X
+      if CLAUDE_CODE_TIMEOUT_SEC=1800 GIT_AUTO_PUSH=1 SITE_AUTO_PUBLISH=1 \
          timeout 5400 bash "$REPO_ROOT/bin/run_weekly.sh" 2>&1; then
         echo ">>> [$attempts] OK $(date '+%H:%M:%S')"
       else
