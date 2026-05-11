@@ -1,12 +1,12 @@
 [Unit]
-Description=K_E_R fill-batch — 2026-05-11 22:30 KST (claude rate-limit 리셋 후 자동 가동)
+Description=K_E_R fill-batch — 매일 22:30 KST (claude rate-limit reset 후 채움)
 Documentation=https://github.com/soccz/K_E_R
 
 [Timer]
-# claude_code subscription extra usage 리셋: 2026-05-11 22:00 KST.
-# 30분 buffer 후 자동 시작.
-OnCalendar=2026-05-11 22:30:00
-# 슬롯 놓치면 즉시 catch-up
+# 매일 22:30 (claude_code extra usage가 22:00 KST에 일별 리셋 후 30분 buffer).
+# period_picker가 활성 PERIOD 끝났으면 즉시 종료 → idle.
+OnCalendar=*-*-* 22:30:00
+# 슬롯 놓치면 catch-up
 Persistent=true
 AccuracySec=1min
 
