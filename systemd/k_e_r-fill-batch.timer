@@ -1,0 +1,14 @@
+[Unit]
+Description=K_E_R fill-batch — 2026-05-11 22:30 KST (claude rate-limit 리셋 후 자동 가동)
+Documentation=https://github.com/soccz/K_E_R
+
+[Timer]
+# claude_code subscription extra usage 리셋: 2026-05-11 22:00 KST.
+# 30분 buffer 후 자동 시작.
+OnCalendar=2026-05-11 22:30:00
+# 슬롯 놓치면 즉시 catch-up
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

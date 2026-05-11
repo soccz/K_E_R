@@ -375,6 +375,17 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         print(f"unknown section: {args.section}")
         return 1
 
+    # incremental 모드: sections_final/<id>.md 이미 있으면 skip (LLM 호출 절약).
+    # batch에서 timeout/rate-limit으로 partial 진전 후 재시작 시 progress 누적.
+    incremental = getattr(args, "incremental", False)
+    if incremental:
+        skipped = [s for s in sections if (report_dir / f"{s}.md").exists()]
+        if skipped:
+            print(f"[incremental] sections_final 이미 존재 — skip: {', '.join(skipped)}")
+        sections = [s for s in sections if not (report_dir / f"{s}.md").exists()]
+
+    if not sections:
+        print(f"[incremental] 모든 섹션 sections_final에 존재 — 합본 단계로 직행")
     failed_any = False
     for sec in sections:
         print(f"\n--- {sec} ---")
@@ -581,6 +592,10 @@ def main() -> int:
     )
     p_gen.add_argument("--skip-fetch", action="store_true", help="이미 받은 데이터 재사용")
     p_gen.add_argument("--skip-owner-summary", action="store_true", help="합본의 owner-valuation 한 페이지 LLM 호출 skip")
+    p_gen.add_argument(
+        "--incremental", action="store_true",
+        help="sections_final/<id>.md 이미 있으면 skip — batch 재시작 시 progress 누적"
+    )
     p_gen.add_argument("--allow-missing-xbrl", action="store_true", help="XBRL 없어도 생성 허용 (기본은 정기보고서에서 hard fail)")
     p_gen.add_argument("--assemble", action="store_true", help="단일 섹션 실행 후에도 합본 재조립")
 

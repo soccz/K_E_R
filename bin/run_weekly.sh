@@ -80,7 +80,8 @@ if "$PYTHON" -m pipeline.run_dart generate \
   --ticker "$TICKER" \
   --bsns-year "$BSNS_YEAR" \
   --reprt-code "$REPRT_CODE" \
-  --period "$PERIOD"; then
+  --period "$PERIOD" \
+  --incremental; then
   HEALTH_DETAIL="{\"ticker\": \"$TICKER\", \"period\": \"$PERIOD\"}"
 else
   RC=$?

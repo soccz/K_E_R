@@ -1,0 +1,16 @@
+[Unit]
+Description=K_E_R 24/24 자동 채우기 batch (rate-limit 리셋 후 1회 실행)
+Documentation=https://github.com/soccz/K_E_R
+After=network-online.target
+Wants=network-online.target
+OnFailure=k_e_r-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/soccz/22tb/report
+EnvironmentFile=/home/soccz/22tb/report/.env
+ExecStart=/home/soccz/22tb/report/bin/run_fill_batch.sh
+StandardOutput=append:/home/soccz/22tb/report/logs/fill_batch_systemd.log
+StandardError=append:/home/soccz/22tb/report/logs/fill_batch_systemd.log
+TimeoutStartSec=14400
+Nice=10
