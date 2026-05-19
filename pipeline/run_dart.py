@@ -29,7 +29,7 @@ from pipeline import config, snapshot
 from pipeline.business_report_extractor import extract_from_filing_dir
 from pipeline.corp_code_mapper import fetch_corp_code_mapping, update_watchlist_md
 from pipeline.cross_section_consistency import build_authoritative_facts
-from pipeline.dart_client import DartClient, REPRT_CODE_LABELS
+from pipeline.dart_client import DartApiError, DartClient, REPRT_CODE_LABELS
 from pipeline.foreign_holdings import load_foreign_holding_snapshot
 from pipeline.frame_loader import load_frame
 from pipeline.local_data_loader import load_local_dart_data
@@ -100,27 +100,58 @@ def _cmd_generate(args: argparse.Namespace) -> int:
     annual_rcept_dt: str | None = None
     if not args.skip_fetch:
         print(f"\nDART에서 정기보고서 검색 중...")
-        filing = client.find_periodic_report(
+        # 정정공시 + 원본 모두 찾기 (최신 → 과거 순)
+        filings = client.find_periodic_reports(
             corp_code=entry.corp_code,
             bsns_year=args.bsns_year,
             reprt_code=args.reprt_code,
         )
-        if not filing:
+        if not filings:
             print(f"ERROR: {company} {args.bsns_year} {args.reprt_code} 보고서 못 찾음")
             return 1
-        print(f"  발견: {filing.report_nm} (rcept_no={filing.rcept_no}, 접수일={filing.rcept_dt})")
+
+        # 첫 filing (=정정공시) 시도 → fail 시 원본(과거) fallback
+        filing = None
+        docs: list = []
+        last_error: Exception | None = None
+        for candidate in filings:
+            print(f"  시도: {candidate.report_nm} (rcept_no={candidate.rcept_no}, 접수일={candidate.rcept_dt})")
+            try:
+                docs = client.download_filing_document(candidate.rcept_no, dart_dir)
+                filing = candidate
+                print(f"  ✓ {len(docs)} 파일")
+                break
+            except DartApiError as e:
+                last_error = e
+                print(f"  ✗ DART 다운로드 실패: {str(e)[:200]}")
+                continue
+
+        if filing is None:
+            print(f"ERROR: {company} 모든 filing ({len(filings)}개) 다운로드 실패")
+            # .skip 파일 — 다음 batch에서 period_picker가 skip
+            skip_file = report_dir / ".skip"
+            skip_file.write_text(
+                f"ticker: {entry.ticker}\n"
+                f"company: {company}\n"
+                f"reason: DART 다운로드 실패 ({len(filings)}개 filing 모두 fail)\n"
+                f"last_error: {last_error}\n"
+                f"skip_until: 다음 PERIOD 또는 사용자 수동 삭제\n",
+                encoding="utf-8",
+            )
+            print(f"  .skip 파일 작성: {skip_file} — 다음 batch에서 자동 skip")
+            return 1
         annual_rcept_dt = filing.rcept_dt
 
-        print(f"\n공시 원문 다운로드 → {dart_dir}")
-        docs = client.download_filing_document(filing.rcept_no, dart_dir)
-        print(f"  {len(docs)} 파일")
-
         print(f"\nXBRL 패키지 다운로드 → {xbrl_dir}")
-        xbrl_files = client.download_xbrl(filing.rcept_no, args.reprt_code, xbrl_dir)
-        if xbrl_files is None:
-            print("  XBRL 미제공 (잠정실적 등)")
-        else:
-            print(f"  {len(xbrl_files)} 파일")
+        try:
+            xbrl_files = client.download_xbrl(filing.rcept_no, args.reprt_code, xbrl_dir)
+            if xbrl_files is None:
+                print("  XBRL 미제공 (잠정실적 등)")
+            else:
+                print(f"  {len(xbrl_files)} 파일")
+        except DartApiError as e:
+            print(f"  ✗ XBRL 다운로드 실패: {str(e)[:200]} — XBRL 없이 진행")
+            xbrl_files = None
 
     frame = load_frame()
     print(f"\nframe/persona/watchlist 로드 완료")

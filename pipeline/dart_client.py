@@ -155,14 +155,30 @@ class DartClient:
         bsns_year: int,
         reprt_code: str,
     ) -> FilingMeta | None:
-        """특정 회사의 특정 연도·주기 정기보고서 찾기.
+        """특정 회사의 특정 연도·주기 정기보고서 찾기 (최신 1건만 — 기존 호환).
 
-        검색 범위: bsns_year 시작 ~ bsns_year+1년 6월 (사업보고서는 다음해 3월말 제출)
+        검색 범위: bsns_year 시작 ~ bsns_year+1년 6월 (사업보고서는 다음해 3월말 제출).
+        정정공시 fail 등 fallback 필요 시 find_periodic_reports 사용.
+        """
+        results = self.find_periodic_reports(corp_code, bsns_year, reprt_code)
+        return results[0] if results else None
+
+    def find_periodic_reports(
+        self,
+        corp_code: str,
+        bsns_year: int,
+        reprt_code: str,
+    ) -> list[FilingMeta]:
+        """특정 회사의 특정 연도·주기 정기보고서 모두 (정정공시 + 원본 포함).
+
+        반환 순서: 최신(=정정공시) → 과거(=원본) 순.
+        정정공시 다운로드 fail 시 원본 fallback 가능.
         """
         bgn = f"{bsns_year}0101"
         end = f"{bsns_year + 1}0630"
         report_label = REPRT_CODE_LABELS[reprt_code]
 
+        out: list[FilingMeta] = []
         page = 1
         while True:
             data = self.list_filings(
@@ -175,11 +191,12 @@ class DartClient:
             )
             for item in data.get("list", []):
                 if report_label in item.get("report_nm", ""):
-                    return FilingMeta.from_dict(item)
+                    out.append(FilingMeta.from_dict(item))
             total_page = data.get("total_page", 1)
             if page >= total_page:
-                return None
+                break
             page += 1
+        return out
 
     def download_corp_code_zip(self, dest_dir: Path) -> Path:
         """전체 회사 코드 ZIP → CORPCODE.xml."""

@@ -57,9 +57,16 @@ def _is_deadline_passed(spec: PeriodSpec, today: datetime | None = None) -> bool
 
 
 def _next_unfinished_ticker(spec: PeriodSpec, watchlist) -> str | None:
-    """24종목 중 현재 PERIOD 미완성 첫 ticker."""
+    """24종목 중 현재 PERIOD 미완성 첫 ticker.
+
+    .skip 파일 있으면 skip (DART 다운로드 영구 실패 등 — 사용자 수동 처리 대상).
+    """
     for entry in watchlist:
-        final = config.COMPANIES_DIR / entry.name / spec.period_label / "00_종합진단.md"
+        report_dir = config.COMPANIES_DIR / entry.name / spec.period_label
+        final = report_dir / "00_종합진단.md"
+        skip_file = report_dir / ".skip"
+        if skip_file.exists():
+            continue  # 영구 skip — 다음 종목으로
         if not is_usable_report(final):
             return entry.ticker
     return None
