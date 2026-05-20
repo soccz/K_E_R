@@ -12,5 +12,5 @@ EnvironmentFile=/home/soccz/22tb/report/.env
 ExecStart=/home/soccz/22tb/report/bin/run_fill_batch.sh
 StandardOutput=append:/home/soccz/22tb/report/logs/fill_batch_systemd.log
 StandardError=append:/home/soccz/22tb/report/logs/fill_batch_systemd.log
-TimeoutStartSec=21600
+TimeoutStartSec=43200
 Nice=10
