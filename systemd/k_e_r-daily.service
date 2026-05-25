@@ -14,6 +14,8 @@ StandardOutput=append:/home/soccz/22tb/report/logs/daily.log
 StandardError=append:/home/soccz/22tb/report/logs/daily.log
 TimeoutStartSec=2400
 Nice=10
+# exit 3 = LLM 가드 차단 (rate limit 등 정상 skip). 실패 아니므로 success 처리.
+SuccessExitStatus=3
 
 [Install]
 WantedBy=default.target
