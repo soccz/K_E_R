@@ -1219,6 +1219,31 @@ def render_status_page(site_root: Path) -> None:
             except Exception:
                 continue
 
+    # PERIOD별 발행률 (24/24 진행 추적 — silent fail 즉시 인지)
+    period_stats: list[dict] = []
+    try:
+        from pipeline.period_picker import _PERIODS as _PERIOD_SPECS
+        from pipeline.watchlist_parser import parse_watchlist
+        from pipeline import config as _config
+        wl = parse_watchlist(_config.WATCHLIST_PATH.read_text(encoding='utf-8'))
+        total = len(wl)
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        for spec in _PERIOD_SPECS:
+            deadline_passed = today_str >= spec.filing_deadline
+            done = 0
+            for w in wl:
+                if (companies_dir / w.name / spec.period_label / "00_종합진단.md").exists():
+                    done += 1
+            pct = round(done / total * 100, 1) if total else 0.0
+            period_stats.append({
+                "period": spec.period_label,
+                "done": done, "total": total, "pct": pct,
+                "deadline": spec.filing_deadline,
+                "deadline_passed": deadline_passed,
+            })
+    except Exception:
+        pass
+
     # render
     timer_rows = []
     for t in timers_data:
@@ -1251,15 +1276,46 @@ def render_status_page(site_root: Path) -> None:
     if not be_rows:
         be_rows.append('<tr><td colspan="4">best-effort 섹션 0건 — 모두 V1~V4 통과 ✓</td></tr>')
 
+    # PERIOD 발행률 rows
+    period_rows = []
+    for ps in period_stats:
+        if not ps["deadline_passed"]:
+            ico_cls = "stat-flat"
+            ico_label = "대기"
+        elif ps["done"] == ps["total"]:
+            ico_cls = "stat-ok"
+            ico_label = "완성"
+        elif ps["done"] == 0:
+            ico_cls = "stat-fail"
+            ico_label = "진행X"
+        else:
+            ico_cls = "stat-skip"
+            ico_label = "진행중"
+        period_rows.append(
+            f'<tr><td class="status-cell"><span class="{ico_cls}">●</span> {ico_label}</td>'
+            f'<td><strong>{escape(ps["period"])}</strong></td>'
+            f'<td>{ps["done"]}/{ps["total"]} ({ps["pct"]:.0f}%)</td>'
+            f'<td class="status-detail">마감 {escape(ps["deadline"])}</td></tr>'
+        )
+
     body = f"""
 <div class="page-hero">
   <span class="doc-tag">System Health</span>
   <h1>Status</h1>
-  <p class="subtitle">자동 실행 결과 + validator 부분 통과 섹션 추적.</p>
+  <p class="subtitle">자동 실행 결과 + PERIOD 발행률 + validator 부분 통과 섹션 추적.</p>
 </div>
 
 <div class="container" style="margin-top:32px">
-  <h2 style="font-size:14px; font-family:var(--mono); text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:14px;">최근 자동 실행</h2>
+  <h2 style="font-size:14px; font-family:var(--mono); text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:14px;">PERIOD 발행률 (24종목 기준)</h2>
+  <p style="font-size:13px; color:var(--text-secondary); margin-bottom:14px;">
+    "진행X" 또는 정체 시 코드 버그 가능성 (DART 매치 fail 등). 사이트 첫 페이지에서 즉시 인지.
+  </p>
+  <table class="status-table">
+    <thead><tr><th>상태</th><th>PERIOD</th><th>발행</th><th>마감일</th></tr></thead>
+    <tbody>{''.join(period_rows) if period_rows else '<tr><td colspan="4">PERIOD 데이터 없음</td></tr>'}</tbody>
+  </table>
+
+  <h2 style="font-size:14px; font-family:var(--mono); text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin:40px 0 14px;">최근 자동 실행</h2>
   <table class="status-table">
     <thead><tr><th>상태</th><th>Timer</th><th>마지막 실행</th><th>상세</th></tr></thead>
     <tbody>{''.join(timer_rows)}</tbody>
