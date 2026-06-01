@@ -176,7 +176,24 @@ class DartClient:
         """
         bgn = f"{bsns_year}0101"
         end = f"{bsns_year + 1}0630"
-        report_label = REPRT_CODE_LABELS[reprt_code]
+
+        # DART 실제 report_nm format:
+        #   사업보고서 (2025.12)
+        #   반기보고서 (2026.06)
+        #   분기보고서 (2026.03)  ← 1Q
+        #   분기보고서 (2026.09)  ← 3Q
+        # 분기 보고서는 같은 "분기보고서" label이라 월(MM)로 구분.
+        def _matches(item: dict) -> bool:
+            name = item.get("report_nm", "")
+            if reprt_code == REPRT_CODE_ANNUAL:
+                return "사업보고서" in name
+            if reprt_code == REPRT_CODE_H1:
+                return "반기보고서" in name
+            if reprt_code == REPRT_CODE_Q1:
+                return "분기보고서" in name and f"({bsns_year}.03)" in name
+            if reprt_code == REPRT_CODE_Q3:
+                return "분기보고서" in name and f"({bsns_year}.09)" in name
+            return False
 
         out: list[FilingMeta] = []
         page = 1
@@ -190,7 +207,7 @@ class DartClient:
                 page_count=100,
             )
             for item in data.get("list", []):
-                if report_label in item.get("report_nm", ""):
+                if _matches(item):
                     out.append(FilingMeta.from_dict(item))
             total_page = data.get("total_page", 1)
             if page >= total_page:
