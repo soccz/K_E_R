@@ -12,7 +12,7 @@ EnvironmentFile=/home/soccz/22tb/report/.env
 ExecStart=/home/soccz/22tb/report/bin/run_weekly.sh
 StandardOutput=append:/home/soccz/22tb/report/logs/weekday.log
 StandardError=append:/home/soccz/22tb/report/logs/weekday.log
-TimeoutStartSec=3600
+TimeoutStartSec=7200
 Nice=10
 
 [Install]
