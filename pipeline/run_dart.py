@@ -401,7 +401,30 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         if auth_facts:
             print(f"권위 사실 dict: {len(auth_facts)}개 항목 (V4 cross-section 검증용)")
 
-    sections = list(SECTION_SPECS.keys()) if args.section == "all" else [args.section]
+    # reprt_code별 sections 선택 (토큰 최적화):
+    #   사업보고서(11011): 11 sections 전부 (연 1회 깊은 분석)
+    #   반기보고서(11012): 7 sections (사업구조·재무·수익성·자본활용·거버넌스·이번분기·추적)
+    #   분기보고서(11013/11014): 5 sections 핵심만 (재무·수익성·거버넌스·이번분기·추적)
+    # 분기는 "지난 분기 대비 변화 추적"이 본질 → 변화 없는 섹션(사업구조·용어·업황 등)은 annual에서 reference.
+    QUARTERLY_SECTIONS = [
+        "02_재무건강진단", "03_수익성진단",
+        "07_거버넌스리스크진단", "08_이번분기변화", "09_추적사항",
+    ]
+    HALF_YEAR_SECTIONS = [
+        "01_사업구조진단", "02_재무건강진단", "03_수익성진단", "04_자본활용진단",
+        "07_거버넌스리스크진단", "08_이번분기변화", "09_추적사항",
+    ]
+    if args.section == "all":
+        if args.reprt_code in ("11013", "11014"):  # 1Q, 3Q
+            sections = QUARTERLY_SECTIONS
+            print(f"[period] 분기보고서 — {len(sections)} sections (annual의 5/11, token 55% 절약)")
+        elif args.reprt_code == "11012":  # H1
+            sections = HALF_YEAR_SECTIONS
+            print(f"[period] 반기보고서 — {len(sections)} sections (annual의 7/11)")
+        else:  # annual
+            sections = list(SECTION_SPECS.keys())
+    else:
+        sections = [args.section]
     if args.section != "all" and args.section not in SECTION_SPECS:
         print(f"unknown section: {args.section}")
         return 1

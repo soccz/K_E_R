@@ -32,6 +32,6 @@ CLAUDE_CODE_NEUTRAL_CWD = os.getenv("CLAUDE_CODE_NEUTRAL_CWD", _DEFAULT_NEUTRAL_
 DART_API_KEY = os.getenv("DART_API_KEY")
 DART_BASE_URL = "https://opendart.fss.or.kr/api"
 
-VALIDATOR_MAX_RETRIES = int(os.getenv("VALIDATOR_MAX_RETRIES", "3"))
+VALIDATOR_MAX_RETRIES = int(os.getenv("VALIDATOR_MAX_RETRIES", "1"))
 
 ALLOWED_PROVIDERS_PHASE1 = {"anthropic", "claude_code"}
