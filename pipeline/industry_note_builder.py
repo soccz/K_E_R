@@ -126,7 +126,7 @@ class IndustryNote:
         if self.raw_llm_text:
             raw_dir = path.parent / "_raw"
             raw_dir.mkdir(parents=True, exist_ok=True)
-            (raw_dir / f"{self.iso_week}-{self.sector}.txt").write_text(
+            (raw_dir / f"{self.iso_week}-{_safe_sector(self.sector)}.txt").write_text(
                 self.raw_llm_text, encoding="utf-8"
             )
 
@@ -134,6 +134,12 @@ class IndustryNote:
 # ────────────────────────────────────────────────────────────────────
 # 섹터 선정 (frame.md §6.3 우선순위)
 # ────────────────────────────────────────────────────────────────────
+
+
+def _safe_sector(sector: str) -> str:
+    """섹터명을 파일명 안전 문자열로. '바이오/제약'의 슬래시가 하위경로로 해석돼
+    FileNotFoundError로 4주 연속 크래시했던 버그(2026-06-21~07-05)의 수리."""
+    return sector.replace("/", "·").replace("\\", "·")
 
 
 def _existing_iso_weeks_by_sector(industry_dir: Path) -> dict[str, list[str]]:
@@ -204,7 +210,7 @@ def pick_sector(
 
     best: SectorPickResult | None = None
     for sec, ents in candidates.items():
-        last_weeks = history.get(sec, [])
+        last_weeks = history.get(_safe_sector(sec), [])
         last_iso = max(last_weeks) if last_weeks else None
         weeks_since = _weeks_between(last_iso, current) if last_iso else 999
         dart_count = sector_dart_counts.get(sec, 0)

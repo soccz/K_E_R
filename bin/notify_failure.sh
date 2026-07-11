@@ -21,8 +21,15 @@ if [ -f "$REPO_ROOT/.env" ]; then
   set -a; source "$REPO_ROOT/.env"; set +a
 fi
 
-if [ -z "${NTFY_TOPIC:-}" ]; then
-  exit 0  # silent — topic 없으면 알림 skip
+# 텔레그램 폴백 (2026-07-12 수리): NTFY_TOPIC 미설정으로 4주간 실패 무통지였던 사고 재발 방지.
+# .env의 TELEGRAM_* 우선, 없으면 prelude .env 크리덴셜 재사용 (읽기만).
+if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] && [ -f /home/soccz/22tb/prelude/.env ]; then
+  TELEGRAM_BOT_TOKEN=$(grep -E '^TELEGRAM_BOT_TOKEN=' /home/soccz/22tb/prelude/.env | head -1 | cut -d= -f2-)
+  TELEGRAM_CHAT_ID=$(grep -E '^TELEGRAM_CHAT_ID=' /home/soccz/22tb/prelude/.env | head -1 | cut -d= -f2-)
+fi
+
+if [ -z "${NTFY_TOPIC:-}" ] && [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  exit 0  # 알림 경로가 정말 하나도 없을 때만 skip
 fi
 
 NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
@@ -42,12 +49,21 @@ BODY="시각: $TS
 마지막 로그 30줄:
 $TAIL_TXT"
 
-curl -fsS \
-  -H "Title: $TITLE" \
-  -H "Priority: high" \
-  -H "Tags: warning,robot" \
-  -H "Click: https://github.com/soccz/K_E_R/actions" \
-  -d "$BODY" \
-  "$NTFY_SERVER/$NTFY_TOPIC" > /dev/null 2>&1 || true
+if [ -n "${NTFY_TOPIC:-}" ]; then
+  curl -fsS \
+    -H "Title: $TITLE" \
+    -H "Priority: high" \
+    -H "Tags: warning,robot" \
+    -H "Click: https://github.com/soccz/K_E_R/actions" \
+    -d "$BODY" \
+    "$NTFY_SERVER/$NTFY_TOPIC" > /dev/null 2>&1 || true
+fi
+
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+  curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+    --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+    --data-urlencode "text=${TITLE}
+${BODY}" > /dev/null 2>&1 || true
+fi
 
 exit 0

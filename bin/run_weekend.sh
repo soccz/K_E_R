@@ -68,7 +68,8 @@ if note is None or not note.is_valid:
     print('[weekend] 산업노트 LLM 호출 실패 — push 차단')
     raise SystemExit(3)
 
-out = industry_dir / f"{note.iso_week}-{note.sector}.md"
+from pipeline.industry_note_builder import _safe_sector
+out = industry_dir / f"{note.iso_week}-{_safe_sector(note.sector)}.md"
 note.save(out)
 print(f'[weekend] saved: {out} ({len(note.to_markdown())} chars, '
       f'비교 {len(note.ticker_comparison_table)}종목)')
