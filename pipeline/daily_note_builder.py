@@ -393,6 +393,7 @@ def _build_llm_prompts(
     macro: list[MacroIndicator],
     ticker_cards: list[TickerCardData],
     triggers_summary: str,
+    macro_issues: list[str] | None = None,
 ) -> tuple[str, str]:
     """학술/연구 톤 일간 메모 LLM 프롬프트."""
     try:
@@ -435,6 +436,18 @@ def _build_llm_prompts(
         f"sector_tone은 워치리스트 13섹터 중 일간 동향이 *유의미한* 섹터만 포함 (3~6개). "
         f"'↑·↓·→' 중 하나."
     )
+
+    # 매크로 게이트 이상 감지 시: 매크로 서사 금지 주입 (2026-07-12)
+    if macro_issues:
+        sys_prompt += (
+            "\n\n## ⚠️ 매크로 데이터 이상 (필수 준수)\n"
+            "아래 매크로 payload 검증에서 이상이 감지됐다:\n"
+            + "\n".join(f"- {x}" for x in macro_issues)
+            + "\n**따라서 observation·헤드라인에서 KOSPI/지수/환율 등 매크로 수치를 근거로 한 "
+            "서사·해석·인과 주장을 일절 하지 말 것.** 매크로 표는 코드가 싣되 '당일 매크로 "
+            "수치는 검증 실패로 해석에서 제외한다'는 취지로만 언급 가능. 종목 카드(KRX 수급·가격)는 "
+            "정상이므로 종목 관찰·해석에 집중하라."
+        )
 
     user_payload = {
         "fetch_date": fetch_date,
@@ -521,13 +534,21 @@ def build_daily_note(
         if card:
             cards.append(card)
 
-    # 2) 매크로
+    # 2) 매크로 + payload 게이트 (2026-07-12: 상류 yfinance 오염 차단, LLM 호출 전)
     macro = build_macro_indicators()
+    macro_issues: list[str] = []
+    try:
+        from pipeline.macro_gate import gate_macro
+        from pipeline import config as _cfg
+        _hist = _cfg.REPO_ROOT / "pipeline" / "cache" / "macro_history.json"
+        macro_issues = gate_macro(macro, _hist)
+    except Exception as _e:
+        macro_issues = []
 
     # 3) LLM 호출 (학술 톤 관찰 + 종목 멘트 + 섹터 톤)
     triggers_summary = _summarize_triggers(trigger_report)
     sys_p, user_p = _build_llm_prompts(
-        trigger_report.fetch_date, macro, cards, triggers_summary
+        trigger_report.fetch_date, macro, cards, triggers_summary, macro_issues
     )
 
     headline = f"★ {triggers_summary}"
