@@ -1,0 +1,5 @@
+ticker: 068270
+company: 셀트리온
+reason: DART 다운로드 실패 (1개 filing 모두 fail)
+last_error: document.xml not ZIP for 20260814003751: <?xml version="1.0" encoding="UTF-8" standalone="yes"?><result><status>014</status><message>파일이 존재하지 않습니다.</message></result>
+skip_until: 다음 PERIOD 또는 사용자 수동 삭제
